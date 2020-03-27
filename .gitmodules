@@ -1,3 +1,7 @@
 [submodule "Essentials-Builds"]
 	path = Essentials-Builds
 	url = https://github.com/PepperDash/Essentials-Builds.git
+[submodule "epi-display-lg/essentials-builds"]
+	path = epi-display-lg/essentials-builds
+	url = https://github.com/PepperDash-Engineering/essentials-builds.git
+	branch = releases

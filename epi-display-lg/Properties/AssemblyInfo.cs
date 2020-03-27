@@ -1,8 +1,8 @@
 ﻿using System.Reflection;
 
-[assembly: AssemblyTitle("EssentialsPluginTemplateEpi")]
+[assembly: AssemblyTitle("Epi-Display-Lg")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("EssentialsPluginTemplateEpi")]
+[assembly: AssemblyProduct("Epi-Display-Lg")]
 [assembly: AssemblyCopyright("Copyright ©  2019")]
 [assembly: AssemblyVersion("1.0.0.*")]
 

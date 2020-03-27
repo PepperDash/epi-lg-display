@@ -12,19 +12,19 @@ using PepperDash.Essentials.Bridges;
 using Crestron.SimplSharp.Reflection;
 using Newtonsoft.Json;
 
-namespace EssentialsPluginTemplateEPI
+namespace Epi.Display.Lg
 {
 	public static class EssentialsPluginTemplateBridge
 	{
 
-		public static void LinkToApiExt(this EssentialsPluginTemplate DspDevice, BasicTriList trilist, uint joinStart, string joinMapKey)
+		public static void LinkToApiExt(this LgDisplay DspDevice, BasicTriList trilist, uint joinStart, string joinMapKey)
 		{
 			EssentialsPluginTemplateBridgeJoinMap joinMap = new EssentialsPluginTemplateBridgeJoinMap(joinStart);
 
 			var JoinMapSerialized = JoinMapHelper.GetJoinMapForDevice(joinMapKey);
-			
-			if (!string.IsNullOrEmpty(JoinMapSerialized))
-				joinMap = JsonConvert.DeserializeObject<EssentialsPluginTemplateBridgeJoinMap>(JoinMapSerialized);
+
+            if (JoinMapSerialized != null)
+				joinMap = JsonConvert.DeserializeObject<EssentialsPluginTemplateBridgeJoinMap>(JoinMapSerialized.ToString());
 
 
 		}
