@@ -1,37 +1,150 @@
 ﻿using System;
-using System.Text;
-using System.Globalization;
-using System.Text.RegularExpressions;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
-using Crestron.SimplSharp;                          				// For Basic SIMPL# Classes
-// For Basic SIMPL#Pro classes
+using System.Text.RegularExpressions;
+using Crestron.SimplSharp;
 using Crestron.SimplSharpPro.DeviceSupport;
 using PepperDash.Core;
 using PepperDash.Essentials.Core;
-using PepperDash.Essentials.Core.Config;
+using PepperDash.Essentials.Core.Bridges;
 using PepperDash.Essentials.Core.Routing;
-using PepperDash.Essentials.Bridges;
-using Newtonsoft.Json;
 
-namespace Epi.Display.Lg 
+namespace Epi.Display.Lg
 {
-	public class LgDisplay : TwoWayDisplayBase, IBasicVolumeWithFeedback, ICommunicationMonitor, IBridge
+    public class LgDisplayController : TwoWayDisplayBase, IBasicVolumeWithFeedback, ICommunicationMonitor,
+        IBridgeAdvanced
 
-	{
-		public static void LoadPlugin()
-		{
-			PepperDash.Essentials.Core.DeviceFactory.AddFactoryForType("lgdisplayplugin", LgDisplay.BuildDevice);	
-		}
+    {
+        public const int InputPowerOn = 101;
 
-		public static LgDisplay BuildDevice(DeviceConfig dc)
-		{
-			var config = JsonConvert.DeserializeObject<DeviceConfig>(dc.Properties.ToString());
-			var newMe = new LgDisplay(dc.Key, dc.Name, config);
-			return newMe;
-		}
+        public const int InputPowerOff = 102;
+        public static List<string> InputKeys = new List<string>();
+        public List<BoolFeedback> InputFeedback;
+        public IntFeedback InputNumberFeedback;
+        private RoutingInputPort _currentInputPort;
+        private List<bool> _inputFeedback;
+        private int _inputNumber;
+        private bool _isCoolingDown;
+        private bool _isMuted;
+        private bool _isSerialComm;
+        private bool _isWarmingUp;
+        private bool _lastCommandSentWasVolume;
+        private int _lastVolumeSent;
+        private CTimer _pollRing;
+        private bool _powerIsOn;
+        private ActionIncrementer _volumeIncrementer;
+        private bool _volumeIsRamping;
+        private ushort _volumeLevelForSig;
+        //private GenericUdpServer _woLServer;
 
-        public static string MinimumEssentialsFrameworkVersion = "1.4.32";
+        public LgDisplayController(string key, string name, LgDisplayPropertiesConfig config, IBasicCommunication comms)
+            : base(key, name)
+        {
+            Communication = comms;
+
+            var props = config;
+            if (props == null)
+            {
+                Debug.Console(0, this, Debug.ErrorLogLevel.Error, "Display configuration must be included");
+                return;
+            }
+            Id = string.IsNullOrEmpty(props.Id) ? props.Id : "01";
+            _upperLimit = props.volumeUpperLimit;
+            _lowerLimit = props.volumeLowerLimit;
+            _pollIntervalMs = props.pollIntervalMs > 1999 ? props.pollIntervalMs : 10000;
+            _coolingTimeMs = props.coolingTimeMs > 0 ? props.coolingTimeMs : 10000;
+            _warmingTimeMs = props.warmingTimeMs > 0 ? props.warmingTimeMs : 8000;
+            //UdpSocketKey = props.udpSocketKey;
+
+            Init();
+        }
+
+        public IBasicCommunication Communication { get; private set; }
+        public CommunicationGather PortGather { get; private set; }
+
+        public string Id { get; private set; }
+
+        public bool PowerIsOn
+        {
+            get { return _powerIsOn; }
+            set
+            {
+                _powerIsOn = value;
+                PowerIsOnFeedback.FireUpdate();
+            }
+        }
+
+        public bool IsWarmingUp
+        {
+            get { return _isWarmingUp; }
+            set
+            {
+                _isWarmingUp = value;
+                IsWarmingUpFeedback.FireUpdate();
+            }
+        }
+
+        public bool IsCoolingDown
+        {
+            get { return _isCoolingDown; }
+            set
+            {
+                _isCoolingDown = value;
+                IsCoolingDownFeedback.FireUpdate();
+            }
+        }
+
+        public bool IsMuted
+        {
+            get { return _isMuted; }
+            set
+            {
+                _isMuted = value;
+                MuteFeedback.FireUpdate();
+            }
+        }
+
+        private readonly int _lowerLimit;
+        private readonly int _upperLimit;
+        private readonly uint _coolingTimeMs;
+        private readonly uint _warmingTimeMs;
+        private readonly long _pollIntervalMs;
+
+        public int InputNumber
+        {
+            get { return _inputNumber; }
+            set
+            {
+                _inputNumber = value;
+                InputNumberFeedback.FireUpdate();
+                UpdateBooleanFeedback(value);
+            }
+        }
+
+        private bool ScaleVolume { get; set; }
+
+        protected override Func<bool> PowerIsOnFeedbackFunc
+        {
+            get { return () => PowerIsOn; }
+        }
+
+        protected override Func<bool> IsCoolingDownFeedbackFunc
+        {
+            get { return () => IsCoolingDown; }
+        }
+
+        protected override Func<bool> IsWarmingUpFeedbackFunc
+        {
+            get { return () => IsWarmingUp; }
+        }
+
+        protected override Func<string> CurrentInputFeedbackFunc
+        {
+            get { return () => _currentInputPort.Key; }
+        }
+
+        #region IBasicVolumeWithFeedback Members
 
         /// <summary>
         /// Volume Level Feedback Property
@@ -41,236 +154,197 @@ namespace Epi.Display.Lg
         /// <summary>
         /// Volume Mute Feedback Property
         /// </summary>
-        public BoolFeedback MuteFeedback {get; private set;}
+        public BoolFeedback MuteFeedback { get; private set; }
 
-        public IBasicCommunication Communication { get; private set; }
-        public CommunicationGather PortGather { get; private set; }
+        /// <summary>
+        /// Scales the level to the range of the display and sends the command
+        /// Set: "kf [SetID] [Range 0x00 - 0x64]"
+        /// </summary>
+        /// <param name="level"></param>
+        public void SetVolume(ushort level)
+        {
+            int scaled;
+            _lastVolumeSent = level;
+            if (!ScaleVolume)
+            {
+                scaled = (int) NumericalHelpers.Scale(level, 0, 65535, 0, 100);
+            }
+            else
+            {
+                scaled = (int) NumericalHelpers.Scale(level, 0, 65535, _lowerLimit, _upperLimit);
+            }
+
+            SendData(string.Format("kf {0} {1}", Id, scaled));
+        }
+
+        /// <summary>
+        /// Set Mute On
+        /// </summary>
+        public void MuteOn()
+        {
+            SendData(string.Format("ke {0} 0", Id));
+        }
+
+        /// <summary>
+        /// Set Mute Off
+        /// </summary>
+        public void MuteOff()
+        {
+            SendData(string.Format("ke {0} 1", Id));
+        }
+
+        /// <summary>
+        /// Toggle Current Mute State
+        /// </summary>
+        public void MuteToggle()
+        {
+            if (IsMuted)
+            {
+                MuteOff();
+            }
+            else
+            {
+                MuteOn();
+            }
+        }
+
+        /// <summary>
+        /// Decrement Volume on Press
+        /// </summary>
+        /// <param name="pressRelease"></param>
+        public void VolumeDown(bool pressRelease)
+        {
+            if (pressRelease)
+            {
+                _volumeIncrementer.StartDown();
+                _volumeIsRamping = true;
+            }
+            else
+            {
+                _volumeIsRamping = false;
+                _volumeIncrementer.Stop();
+            }
+        }
+
+        /// <summary>
+        /// Increment Volume on press
+        /// </summary>
+        /// <param name="pressRelease"></param>
+        public void VolumeUp(bool pressRelease)
+        {
+            if (pressRelease)
+            {
+                _volumeIncrementer.StartUp();
+                _volumeIsRamping = true;
+            }
+            else
+            {
+                _volumeIsRamping = false;
+                _volumeIncrementer.Stop();
+            }
+        }
+
+        #endregion
+
+        #region IBridgeAdvanced Members
+
+        public void LinkToApi(BasicTriList trilist, uint joinStart, string joinMapKey, EiscApiAdvanced bridge)
+        {
+            LinkDisplayToApi(this, trilist, joinStart, joinMapKey, bridge);
+        }
+
+        #endregion
+
+        #region ICommunicationMonitor Members
+
         public StatusMonitorBase CommunicationMonitor { get; private set; }
 
-        public string ID { get; private set; }
-
-        bool LastCommandSentWasVolume;
-        private bool IsSerialComm = false;
-
-        private bool _PowerIsOn { get; set; }
-        public bool PowerIsOn
-        {
-            get
-            {
-                return _PowerIsOn;
-            }
-            set
-            {
-                _PowerIsOn = value;
-                PowerIsOnFeedback.FireUpdate();
-            }
-        }
-
-        private bool _IsWarmingUp { get; set; }
-        public bool IsWarmingUp
-        {
-            get
-            {
-                return _IsWarmingUp;
-            }
-            set
-            {
-                _IsWarmingUp = value;
-                IsWarmingUpFeedback.FireUpdate();
-            }
-        }
-
-        private bool _IsCoolingDown { get; set; }
-        public bool IsCoolingDown
-        {
-            get
-            {
-                return _IsCoolingDown;
-            }
-            set
-            {
-                _IsCoolingDown = value;
-                IsCoolingDownFeedback.FireUpdate();
-            }
-        }
-        ushort _VolumeLevelForSig;
-        int _LastVolumeSent;
-
-        private bool _IsMuted { get; set; }
-        public bool IsMuted
-        {
-            get
-            {
-                return _IsMuted;
-            }
-            set
-            {
-                _IsMuted = value;
-                MuteFeedback.FireUpdate();
-            }
-        }
-
-        RoutingInputPort _CurrentInputPort;
-        byte[] IncomingBuffer = new byte[] { };
-        ActionIncrementer VolumeIncrementer;
-        bool VolumeIsRamping;
-        public bool IsInStandby { get; private set; }
-        bool IsPoweringOnIgnorePowerFb;
-        private int LowerLimit { get; set; }
-        private int UpperLimit { get; set; }
-        private uint CoolingTimeMs { get; set; }
-        private uint WarmingTimeMs { get; set; }
-        private long PollIntervalMs { get; set; }
-        private string UdpSocketKey { get;  set; }
-        private string MacAddress {get;  set; }
-        private byte[] MagicPacket { get;  set; }
-        private GenericUdpServer WoLServer;
-
-
-        CTimer PollRing;
-
-        public List<BoolFeedback> InputFeedback;
-        public List<bool> _InputFeedback;
-        public IntFeedback InputNumberFeedback;
-        public static List<string> InputKeys = new List<string>();
-        public const int InputPowerOn = 101;
-
-        public const int InputPowerOff = 102;
-        private int _InputNumber;
-        public int InputNumber
-        {
-            get
-            {
-                return this._InputNumber;
-            }
-            set
-            {
-                this._InputNumber = value;
-                InputNumberFeedback.FireUpdate();
-                UpdateBooleanFeedback(value);
-            }
-        }
-        private bool ScaleVolume { get; set; }
-
-        protected override Func<bool> PowerIsOnFeedbackFunc { get { return () => PowerIsOn; } }
-        protected override Func<bool> IsCoolingDownFeedbackFunc { get { return () => IsCoolingDown; } }
-        protected override Func<bool> IsWarmingUpFeedbackFunc { get { return () => IsWarmingUp; } }
-        protected override Func<string> CurrentInputFeedbackFunc { get { return () => _CurrentInputPort.Key; } }
-
-        public LgDisplay(string key, string name, DeviceConfig config)
-			: base(config.Key, config.Name)
-		{
-            Communication = CommFactory.CreateCommForDevice(config);
-            var props = config.Properties.ToObject<LgDisplayPropertiesConfig>();
-            if (props != null) {
-                ID = string.IsNullOrEmpty(props.Id) ? props.Id : "01";
-                UpperLimit = props.volumeUpperLimit;
-                LowerLimit = props.volumeLowerLimit;
-                PollIntervalMs = props.pollIntervalMs > 1999 ? props.pollIntervalMs : 10000;
-                CoolingTimeMs = props.coolingTimeMs > 0 ? props.coolingTimeMs : 10000;
-                WarmingTimeMs = props.warmingTimeMs > 0 ? props.warmingTimeMs : 8000;
-                UdpSocketKey = props.udpSocketKey;
-                MacAddress = props.macAddress;
-
-                Init();
-            }
-		}
-
-        
+        #endregion
 
         private void Init()
         {
-            WarmupTime = WarmingTimeMs > 0 ? WarmingTimeMs : 10000;
-            CooldownTime = CoolingTimeMs > 0 ? CoolingTimeMs : 8000;
+            WarmupTime = _warmingTimeMs > 0 ? _warmingTimeMs : 10000;
+            CooldownTime = _coolingTimeMs > 0 ? _coolingTimeMs : 8000;
 
-            _InputFeedback = new List<bool>();
+            _inputFeedback = new List<bool>();
             InputFeedback = new List<BoolFeedback>();
 
-            if (UpperLimit != LowerLimit)
+            if (_upperLimit != _lowerLimit && _upperLimit > _lowerLimit)
             {
-                if (UpperLimit > LowerLimit)
-                {
-                    ScaleVolume = true;
-                }
+                ScaleVolume = true;
             }
+
             PortGather = new CommunicationGather(Communication, "x");
-            PortGather.LineReceived += new EventHandler<GenericCommMethodReceiveTextArgs>(PortGather_LineReceived);
+            PortGather.LineReceived += PortGather_LineReceived;
 
             var socket = Communication as ISocketStatus;
             if (socket != null)
             {
                 //This Instance Uses IP Control
                 Debug.Console(2, this, "The LG Display Plugin does NOT support IP Control currently");
-                socket.ConnectionChange += new EventHandler<GenericSocketStatusChageEventArgs>(socket_ConnectionChange);
-                IsSerialComm = false;
-                var udpServer = DeviceManager.GetDeviceForKey(UdpSocketKey);
-                WoLServer = udpServer as GenericUdpServer;
             }
             else
             {
                 // This instance uses RS-232 Control
-                IsSerialComm = true;
+                _isSerialComm = true;
             }
 
-            //TODO: determine your poll rate the first value in teh GenericCommunicationMonitor, currently 45s (45,000)
-            var PollInterval = PollIntervalMs > 0 ? PollIntervalMs : 10000;
-            CommunicationMonitor = new GenericCommunicationMonitor(this, Communication, PollInterval, 180000, 300000, StatusGet);
+            var pollInterval = _pollIntervalMs > 0 ? _pollIntervalMs : 10000;
+            CommunicationMonitor = new GenericCommunicationMonitor(this, Communication, pollInterval, 180000, 300000,
+                StatusGet);
+            CommunicationMonitor.StatusChange += CommunicationMonitor_StatusChange;
 
             DeviceManager.AddDevice(CommunicationMonitor);
 
             if (!ScaleVolume)
             {
-                VolumeIncrementer = new ActionIncrementer(655, 0, 65535, 800, 80,
-                    v => SetVolume((ushort)v),
-                    () => _LastVolumeSent);
+                _volumeIncrementer = new ActionIncrementer(655, 0, 65535, 800, 80,
+                    v => SetVolume((ushort) v),
+                    () => _lastVolumeSent);
             }
             else
             {
-                var ScaleUpper = NumericalHelpers.Scale((double)UpperLimit, 0, 100, 0, 65535);
-                var ScaleLower = NumericalHelpers.Scale((double)LowerLimit, 0, 100, 0, 65535);
+                var scaleUpper = NumericalHelpers.Scale(_upperLimit, 0, 100, 0, 65535);
+                var scaleLower = NumericalHelpers.Scale(_lowerLimit, 0, 100, 0, 65535);
 
-                VolumeIncrementer = new ActionIncrementer(655, (int)ScaleLower, (int)ScaleUpper, 800, 80,
-                    v => SetVolume((ushort)v),
-                    () => _LastVolumeSent);
+                _volumeIncrementer = new ActionIncrementer(655, (int) scaleLower, (int) scaleUpper, 800, 80,
+                    v => SetVolume((ushort) v),
+                    () => _lastVolumeSent);
             }
 
-            if(!String.IsNullOrEmpty(MacAddress)) {
-                MagicPacket = WolFunction(MacAddress);
-            }
+            MuteFeedback = new BoolFeedback(() => IsMuted);
+            VolumeLevelFeedback = new IntFeedback(() => _volumeLevelForSig);
 
-            AddRoutingInputPort(new RoutingInputPort(RoutingPortNames.HdmiIn1, eRoutingSignalType.Audio | eRoutingSignalType.Video,
-                eRoutingPortConnectionType.Hdmi, new Action(InputHdmi1), this), "90");
-            AddRoutingInputPort(new RoutingInputPort(RoutingPortNames.HdmiIn2, eRoutingSignalType.Audio | eRoutingSignalType.Video,
-                eRoutingPortConnectionType.Hdmi, new Action(InputHdmi2), this), "91");
-            AddRoutingInputPort(new RoutingInputPort(RoutingPortNames.DisplayPortIn, eRoutingSignalType.Audio | eRoutingSignalType.Video,
-                eRoutingPortConnectionType.DisplayPort, new Action(InputDisplayPort), this), "C0");       
-        }
-
-        void socket_ConnectionChange(object sender, GenericSocketStatusChageEventArgs e)
-        {
-            throw new NotImplementedException();
+            AddRoutingInputPort(
+                new RoutingInputPort(RoutingPortNames.HdmiIn1, eRoutingSignalType.Audio | eRoutingSignalType.Video,
+                    eRoutingPortConnectionType.Hdmi, new Action(InputHdmi1), this), "90");
+            AddRoutingInputPort(
+                new RoutingInputPort(RoutingPortNames.HdmiIn2, eRoutingSignalType.Audio | eRoutingSignalType.Video,
+                    eRoutingPortConnectionType.Hdmi, new Action(InputHdmi2), this), "91");
+            AddRoutingInputPort(
+                new RoutingInputPort(RoutingPortNames.DisplayPortIn, eRoutingSignalType.Audio | eRoutingSignalType.Video,
+                    eRoutingPortConnectionType.DisplayPort, new Action(InputDisplayPort), this), "C0");
         }
 
         public override bool CustomActivate()
         {
             Communication.Connect();
-            CommunicationMonitor.StatusChange += new EventHandler<MonitorStatusChangeEventArgs>(CommunicationMonitor_StatusChange);
-            if (IsSerialComm)
+
+            if (_isSerialComm)
             {
                 CommunicationMonitor.Start();
             }
-            return true;
+
+            return base.CustomActivate();
         }
 
-        void CommunicationMonitor_StatusChange(object sender, MonitorStatusChangeEventArgs e)
+        private void CommunicationMonitor_StatusChange(object sender, MonitorStatusChangeEventArgs e)
         {
-            throw new NotImplementedException();
+            CommunicationMonitor.IsOnlineFeedback.FireUpdate();
         }
 
-        void PortGather_LineReceived(object sender, GenericCommMethodReceiveTextArgs args)
+        private void PortGather_LineReceived(object sender, GenericCommMethodReceiveTextArgs args)
         {
-            Debug.Console(1, this, "RX : '{0}'", args.Text);
-
             var data = Regex.Replace(args.Text, "OK", "").Split(' ');
 
 
@@ -278,7 +352,7 @@ namespace Epi.Display.Lg
             var id = data[1];
             var responseValue = data[2];
 
-            if (id.Equals(this.ID))
+            if (id.Equals(Id))
             {
                 switch (command)
                 {
@@ -294,40 +368,18 @@ namespace Epi.Display.Lg
                     case ("e"):
                         UpdateMuteFb(responseValue);
                         break;
-                    default:
-                        break;
                 }
             }
             else
+            {
                 Debug.Console(2, this, "Device ID Mismatch - Discarding Response");
-
+            }
         }
 
-        void AddRoutingInputPort(RoutingInputPort port, string fbMatch)
+        private void AddRoutingInputPort(RoutingInputPort port, string fbMatch)
         {
             port.FeedbackMatchObject = fbMatch;
             InputPorts.Add(port);
-        }
-
-        /// <summary>
-        /// Scales the level to the range of the display and sends the command
-        /// Set: "kf [SetID] [Range 0x00 - 0x64]"
-        /// </summary>
-        /// <param name="level"></param>
-        public void SetVolume(ushort level)
-        {
-            int scaled;
-            _LastVolumeSent = level;
-            if (!ScaleVolume)
-            {
-                scaled = (int)NumericalHelpers.Scale(level, 0, 65535, 0, 100);
-            }
-            else
-            {
-                scaled = (int)NumericalHelpers.Scale(level, 0, 65535, LowerLimit, UpperLimit);
-            }
-
-            SendData(string.Format("kf {0} {1}", ID, scaled));       
         }
 
         /// <summary>
@@ -335,40 +387,19 @@ namespace Epi.Display.Lg
         /// 
         /// </summary>
         /// <param name="s"></param>
-        void SendData(string s)
+        private void SendData(string s)
         {
-            if (LastCommandSentWasVolume)
+            if (_lastCommandSentWasVolume)
             {
                 if (s[1] != 'f')
                 {
                     CrestronEnvironment.Sleep(100);
                 }
             }
-            if (s[1] == 'f')
-            {
-                LastCommandSentWasVolume = true;
-            }
-            else
-            {
-                LastCommandSentWasVolume = false;
-            }
+
+            _lastCommandSentWasVolume = s[1] == 'f';
+
             Communication.SendText(s + "\x0D");
-        }
-
-        /// <summary>
-        /// Set Mute On
-        /// </summary>
-        public void MuteOn()
-        {
-            SendData(string.Format("ke {0} 0", ID));
-        }
-
-        /// <summary>
-        /// Set Mute Off
-        /// </summary>
-        public void MuteOff()
-        {
-            SendData(string.Format("ke {0} 1", ID));
         }
 
         /// <summary>
@@ -376,54 +407,7 @@ namespace Epi.Display.Lg
         /// </summary>
         public void MuteGet()
         {
-            SendData(string.Format("ke {0} FF", ID));
-        }
-
-        /// <summary>
-        /// Toggle Current Mute State
-        /// </summary>
-        public void MuteToggle()
-        {
-            if (IsMuted)
-                MuteOff();
-            else
-                MuteOn();
-        }
-
-        /// <summary>
-        /// Decrement Volume on Press
-        /// </summary>
-        /// <param name="pressRelease"></param>
-        public void VolumeDown(bool pressRelease)
-        {
-            if (pressRelease)
-            {
-                VolumeIncrementer.StartDown();
-                VolumeIsRamping = true;
-            }
-            else
-            {
-                VolumeIsRamping = false;
-                VolumeIncrementer.Stop();
-            }
-        }
-
-        /// <summary>
-        /// Increment Volume on press
-        /// </summary>
-        /// <param name="pressRelease"></param>
-        public void VolumeUp(bool pressRelease)
-        {
-            if (pressRelease)
-            {
-                VolumeIncrementer.StartUp();
-                VolumeIsRamping = true;
-            }
-            else
-            {
-                VolumeIsRamping = false;
-                VolumeIncrementer.Stop();
-            }
+            SendData(string.Format("ke {0} FF", Id));
         }
 
         /// <summary>
@@ -431,13 +415,8 @@ namespace Epi.Display.Lg
         /// </summary>
         public void VolumeGet()
         {
-            SendData(string.Format("kf {0} FF", ID));
-            PollRing = new CTimer(o => MuteGet(), null, 100);
-        }
-
-        public void LinkToApi(BasicTriList trilist, uint joinStart, string joinMapKey)
-        {
-            this.LinkToApiExt(trilist, joinStart, joinMapKey);
+            SendData(string.Format("kf {0} FF", Id));
+            _pollRing = new CTimer(o => MuteGet(), null, 100);
         }
 
         /// <summary>
@@ -445,7 +424,7 @@ namespace Epi.Display.Lg
         /// </summary>
         public void InputHdmi1()
         {
-            SendData(string.Format("xb {0} 90", ID));
+            SendData(string.Format("xb {0} 90", Id));
         }
 
         /// <summary>
@@ -453,7 +432,7 @@ namespace Epi.Display.Lg
         /// </summary>
         public void InputHdmi2()
         {
-            SendData(string.Format("xb {0} 91", ID));
+            SendData(string.Format("xb {0} 91", Id));
         }
 
         /// <summary>
@@ -461,7 +440,7 @@ namespace Epi.Display.Lg
         /// </summary>
         public void InputDisplayPort()
         {
-            SendData(string.Format("xb {0} C0", ID));
+            SendData(string.Format("xb {0} C0", Id));
         }
 
         /// <summary>
@@ -469,7 +448,7 @@ namespace Epi.Display.Lg
         /// </summary>
         public void InputGet()
         {
-            SendData(string.Format("xb {0} FF", ID));
+            SendData(string.Format("xb {0} FF", Id));
         }
 
         /// <summary>
@@ -482,17 +461,30 @@ namespace Epi.Display.Lg
             //    Debug.Console(1, this, "WARNING: ExecuteSwitch cannot handle type {0}", selector.GetType());
 
             if (PowerIsOn)
-                (selector as Action)();
+            {
+                var action = selector as Action;
+                if (action != null)
+                {
+                    action();
+                }
+            }
             else // if power is off, wait until we get on FB to send it. 
             {
                 // One-time event handler to wait for power on before executing switch
                 EventHandler<FeedbackEventArgs> handler = null; // necessary to allow reference inside lambda to handler
                 handler = (o, a) =>
                 {
-                    if (!_IsWarmingUp) // Done warming
+                    if (_isWarmingUp)
                     {
-                        IsWarmingUpFeedback.OutputChange -= handler;
-                        (selector as Action)();
+                        return;
+                    }
+
+                    IsWarmingUpFeedback.OutputChange -= handler;
+
+                    var action = selector as Action;
+                    if (action != null)
+                    {
+                        action();
                     }
                 };
                 IsWarmingUpFeedback.OutputChange += handler; // attach and wait for on FB
@@ -505,19 +497,9 @@ namespace Epi.Display.Lg
         /// </summary>
         public override void PowerOn()
         {
-            if (IsSerialComm)
+            if (_isSerialComm)
             {
-                SendData(string.Format("ka {0} 1", ID));
-            }
-            if (!IsSerialComm)
-            {
-                if (WoLServer != null || MagicPacket != null)
-                {
-                    WoLServer.Connect();
-                    WoLServer.SendBytes(MagicPacket);
-                }
-                else
-                    Debug.Console(0, this, "Problem Generatig the Magic Packet!!! - WoL Failed!");
+                SendData(string.Format("ka {0} 1", Id));
             }
         }
 
@@ -526,7 +508,7 @@ namespace Epi.Display.Lg
         /// </summary>
         public override void PowerOff()
         {
-            SendData(string.Format("ka {0} 0", ID));
+            SendData(string.Format("ka {0} 0", Id));
         }
 
         /// <summary>
@@ -534,7 +516,7 @@ namespace Epi.Display.Lg
         /// </summary>
         public void PowerGet()
         {
-            SendData(string.Format("ka {0} FF", ID));
+            SendData(string.Format("ka {0} FF", Id));
         }
 
         /// <summary>
@@ -547,7 +529,9 @@ namespace Epi.Display.Lg
                 PowerOff();
             }
             else
+            {
                 PowerOn();
+            }
         }
 
         /// <summary>
@@ -557,23 +541,21 @@ namespace Epi.Display.Lg
         public void UpdateInputFb(string s)
         {
             var newInput = InputPorts.FirstOrDefault(i => i.FeedbackMatchObject.Equals(s));
-            if (newInput != null && newInput != _CurrentInputPort)
+            if (newInput != null && newInput != _currentInputPort)
             {
-                _CurrentInputPort = newInput;
+                _currentInputPort = newInput;
                 CurrentInputFeedback.FireUpdate();
                 var key = newInput.Key;
                 switch (key)
                 {
-                    case "hdmiIn1" :
+                    case "hdmiIn1":
                         InputNumber = 1;
                         break;
-                    case "hdmiIn2" :
+                    case "hdmiIn2":
                         InputNumber = 2;
                         break;
-                    case "displayPortIn" :
+                    case "displayPortIn":
                         InputNumber = 3;
-                        break;
-                    default :
                         break;
                 }
             }
@@ -585,7 +567,7 @@ namespace Epi.Display.Lg
         /// <param name="s">response from device</param>
         public void UpdatePowerFb(string s)
         {
-            PowerIsOn = s.Contains("1") ? true : false;
+            PowerIsOn = s.Contains("1");
             PowerIsOnFeedback.FireUpdate();
         }
 
@@ -595,22 +577,26 @@ namespace Epi.Display.Lg
         /// <param name="s">response from device</param>
         public void UpdateVolumeFb(string s)
         {
-            ushort newVol = 0;
+            ushort newVol;
             if (!ScaleVolume)
             {
-                newVol = (ushort)NumericalHelpers.Scale(Convert.ToDouble(s), 0, 100, 0, 65535);
+                newVol = (ushort) NumericalHelpers.Scale(Convert.ToDouble(s), 0, 100, 0, 65535);
             }
             else
             {
-                newVol = (ushort)NumericalHelpers.Scale(Convert.ToDouble(s), LowerLimit, UpperLimit, 0, 65535);
+                newVol = (ushort) NumericalHelpers.Scale(Convert.ToDouble(s), _lowerLimit, _upperLimit, 0, 65535);
             }
-            if (!VolumeIsRamping)
-                _LastVolumeSent = newVol;
-            if (newVol != _VolumeLevelForSig)
+            if (!_volumeIsRamping)
             {
-                _VolumeLevelForSig = newVol;
-                VolumeLevelFeedback.FireUpdate();
+                _lastVolumeSent = newVol;
             }
+
+            if (newVol == _volumeLevelForSig)
+            {
+                return;
+            }
+            _volumeLevelForSig = newVol;
+            VolumeLevelFeedback.FireUpdate();
         }
 
         /// <summary>
@@ -619,7 +605,7 @@ namespace Epi.Display.Lg
         /// <param name="s">response from device</param>
         public void UpdateMuteFb(string s)
         {
-            IsMuted = s.Contains("1") ? true : false;
+            IsMuted = s.Contains("1");
         }
 
         /// <summary>
@@ -630,25 +616,26 @@ namespace Epi.Display.Lg
         {
             try
             {
-                if (_InputFeedback[data] == true)
-                    return;
-                else
+                if (_inputFeedback[data])
                 {
-                    for (int i = 1; i < InputPorts.Count + 1; i++)
-                    {
-                        _InputFeedback[i] = false;
-                    }
-                    _InputFeedback[data] = true;
-                    foreach (var item in InputFeedback)
-                    {
-                        var update = item;
-                        update.FireUpdate();
-                    }
+                    return;
+                }
+
+                for (var i = 1; i < InputPorts.Count + 1; i++)
+                {
+                    _inputFeedback[i] = false;
+                }
+
+                _inputFeedback[data] = true;
+                foreach (var item in InputFeedback)
+                {
+                    var update = item;
+                    update.FireUpdate();
                 }
             }
             catch (Exception e)
             {
-                Debug.Console(0, this, "Exception Here - {0}", e.Message);
+                Debug.Console(0, this, "{0}", e.Message);
             }
         }
 
@@ -660,52 +647,47 @@ namespace Epi.Display.Lg
             //SendBytes(new byte[] { Header, StatusControlCmd, 0x00, 0x00, StatusControlGet, 0x00 });
 
             PowerGet();
-            if (PollRing != null) PollRing = null;
-            PollRing = new CTimer(o => InputGet(), null, 1000);
-
+   
+             _pollRing = null;
+          
+            _pollRing = new CTimer(o => InputGet(), null, 1000);
         }
 
 
-
-
-        private byte[] WolFunction(string macAddress)
+        private void WolFunction(string macAddress)
         {
             if (Regex.IsMatch(macAddress, @"^([0-9A-Fa-f]{2}[\.:-]){5}([0-9A-Fa-f]{2})$") ||
                 Regex.IsMatch(macAddress, @"^([0-9A-Fa-f]{12})"))
             {
-
-                var _macAddress = (Regex.Replace(macAddress, @"(-|:|\.)", "")).ToLower();
+                var address = (Regex.Replace(macAddress, @"(-|:|\.)", "")).ToLower();
 
                 var counter = 0;
 
-                byte[] bytes = new byte[1024];
+                var bytes = new byte[1024];
 
                 //Packet starts with 6 iterations of 0xFF
-                for (int i = 0; i < 6; i++)
+                for (var i = 0; i < 6; i++)
+                {
                     bytes[counter++] = 0xFF;
+                }
 
                 //Packet has 16 iterations of the mac address
-                for (int y = 0; y < 16; y++)
+                for (var y = 0; y < 16; y++)
                 {
-                    int i = 0;
-                    for (int z = 0; z < 6; z++)
+                    var i = 0;
+                    for (var z = 0; z < 6; z++)
                     {
                         bytes[counter++] =
-                            byte.Parse(_macAddress.Substring(i, 2),
-                            NumberStyles.HexNumber);
+                            byte.Parse(address.Substring(i, 2),
+                                NumberStyles.HexNumber);
                         i += 2;
                     }
                 }
-                return bytes;
+                return;
             }
-            else
-            {
-                Debug.Console(2, this, "Invalid Mad Address sent to WolFunction - {0}", macAddress);
-                throw new ArgumentException("Invalid MAC Address");
-            }
+
+            Debug.Console(2, this, "Invalid Mad Address sent to WolFunction - {0}", macAddress);
+            throw new ArgumentException("Invalid MAC Address");
         }
-
-
     }
 }
-
