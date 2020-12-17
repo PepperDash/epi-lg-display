@@ -36,6 +36,7 @@ namespace Epi.Display.Lg
         private ActionIncrementer _volumeIncrementer;
         private bool _volumeIsRamping;
         private ushort _volumeLevelForSig;
+        private bool _smallDisplay;
         //private GenericUdpServer _woLServer;
 
         public LgDisplayController(string key, string name, LgDisplayPropertiesConfig config, IBasicCommunication comms)
@@ -49,6 +50,7 @@ namespace Epi.Display.Lg
                 Debug.Console(0, this, Debug.ErrorLogLevel.Error, "Display configuration must be included");
                 return;
             }
+            _smallDisplay = props.SmallDisplay;
             Id = string.IsNullOrEmpty(props.Id) ? props.Id : "01";
             _upperLimit = props.volumeUpperLimit;
             _lowerLimit = props.volumeLowerLimit;
@@ -492,6 +494,7 @@ namespace Epi.Display.Lg
             }
         }
 
+
         /// <summary>
         /// Set Power On For Device
         /// </summary>
@@ -499,7 +502,7 @@ namespace Epi.Display.Lg
         {
             if (_isSerialComm)
             {
-                SendData(string.Format("ka {0} 1", Id));
+                SendData(string.Format("ka {0} {1}", Id, _smallDisplay ? "1": "01"));
             }
         }
 
@@ -508,7 +511,7 @@ namespace Epi.Display.Lg
         /// </summary>
         public override void PowerOff()
         {
-            SendData(string.Format("ka {0} 0", Id));
+            SendData(string.Format("ka {0} {1}", Id, _smallDisplay ? "0" : "00"));
         }
 
         /// <summary>
