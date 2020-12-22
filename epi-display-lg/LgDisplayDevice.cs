@@ -116,8 +116,10 @@ namespace Epi.Display.Lg
         public int InputNumber
         {
             get { return _inputNumber; }
-            set
+            private set
             {
+                if (_inputNumber == value) return;
+
                 _inputNumber = value;
                 InputNumberFeedback.FireUpdate();
                 UpdateBooleanFeedback(value);
@@ -125,7 +127,7 @@ namespace Epi.Display.Lg
         }
 
         private bool ScaleVolume { get; set; }
-
+        
         protected override Func<bool> PowerIsOnFeedbackFunc
         {
             get { return () => PowerIsOn; }
@@ -184,7 +186,7 @@ namespace Epi.Display.Lg
         /// </summary>
         public void MuteOn()
         {
-            SendData(string.Format("ke {0} 0", Id));
+            SendData(string.Format("ke {0} 1", Id));
         }
 
         /// <summary>
@@ -192,7 +194,7 @@ namespace Epi.Display.Lg
         /// </summary>
         public void MuteOff()
         {
-            SendData(string.Format("ke {0} 1", Id));
+            SendData(string.Format("ke {0} 0", Id));
         }
 
         /// <summary>
@@ -347,35 +349,36 @@ namespace Epi.Display.Lg
 
         private void PortGather_LineReceived(object sender, GenericCommMethodReceiveTextArgs args)
         {
-            var data = Regex.Replace(args.Text, "OK", "").Split(' ');
+            var data = args.Text.Trim().Replace("OK", "").Split(' ');
 
 
             var command = data[0];
             var id = data[1];
             var responseValue = data[2];
 
-            if (id.Equals(Id))
-            {
-                switch (command)
-                {
-                    case ("a"):
-                        UpdatePowerFb(responseValue);
-                        break;
-                    case ("b"):
-                        UpdateInputFb(responseValue);
-                        break;
-                    case ("f"):
-                        UpdateVolumeFb(responseValue);
-                        break;
-                    case ("e"):
-                        UpdateMuteFb(responseValue);
-                        break;
-                }
-            }
-            else
+            if (!id.Equals(Id))
             {
                 Debug.Console(2, this, "Device ID Mismatch - Discarding Response");
+                return;
             }
+
+            //command = 'ka' 
+            switch (command)
+            {
+                case ("a"):
+                    UpdatePowerFb(responseValue);
+                    break;
+                case ("b"):
+                    UpdateInputFb(responseValue);
+                    break;
+                case ("f"):
+                    UpdateVolumeFb(responseValue);
+                    break;
+                case ("e"):
+                    UpdateMuteFb(responseValue);
+                    break;
+            }
+
         }
 
         private void AddRoutingInputPort(RoutingInputPort port, string fbMatch)
@@ -418,7 +421,6 @@ namespace Epi.Display.Lg
         public void VolumeGet()
         {
             SendData(string.Format("kf {0} FF", Id));
-            _pollRing = new CTimer(o => MuteGet(), null, 100);
         }
 
         /// <summary>
@@ -522,6 +524,7 @@ namespace Epi.Display.Lg
             SendData(string.Format("ka {0} FF", Id));
         }
 
+
         /// <summary>
         /// Toggle current power state for device
         /// </summary>
@@ -543,6 +546,7 @@ namespace Epi.Display.Lg
         /// <param name="s">response from device</param>
         public void UpdateInputFb(string s)
         {
+            Debug.Console(1, this, "UpdateInputFb: {0}", s);
             var newInput = InputPorts.FirstOrDefault(i => i.FeedbackMatchObject.Equals(s));
             if (newInput != null && newInput != _currentInputPort)
             {
@@ -570,6 +574,7 @@ namespace Epi.Display.Lg
         /// <param name="s">response from device</param>
         public void UpdatePowerFb(string s)
         {
+            Debug.Console(1, this, "UpdatePowerFb: {0}", s);
             PowerIsOn = s.Contains("1");
             PowerIsOnFeedback.FireUpdate();
         }
@@ -580,6 +585,7 @@ namespace Epi.Display.Lg
         /// <param name="s">response from device</param>
         public void UpdateVolumeFb(string s)
         {
+            Debug.Console(1, this, "UpdateVolumeFb: {0}", s);
             ushort newVol;
             if (!ScaleVolume)
             {
@@ -608,6 +614,7 @@ namespace Epi.Display.Lg
         /// <param name="s">response from device</param>
         public void UpdateMuteFb(string s)
         {
+            Debug.Console(1, this, "UpdateMuteFb: {0}", s);
             IsMuted = s.Contains("1");
         }
 
@@ -650,10 +657,9 @@ namespace Epi.Display.Lg
             //SendBytes(new byte[] { Header, StatusControlCmd, 0x00, 0x00, StatusControlGet, 0x00 });
 
             PowerGet();
-   
-             _pollRing = null;
-          
-            _pollRing = new CTimer(o => InputGet(), null, 1000);
+            InputGet();
+            VolumeGet();
+            MuteGet();
         }
 
 
