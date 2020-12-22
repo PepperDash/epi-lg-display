@@ -546,7 +546,6 @@ namespace Epi.Display.Lg
         /// <param name="s">response from device</param>
         public void UpdateInputFb(string s)
         {
-            Debug.Console(1, this, "UpdateInputFb: {0}", s);
             var newInput = InputPorts.FirstOrDefault(i => i.FeedbackMatchObject.Equals(s));
             if (newInput != null && newInput != _currentInputPort)
             {
@@ -574,7 +573,6 @@ namespace Epi.Display.Lg
         /// <param name="s">response from device</param>
         public void UpdatePowerFb(string s)
         {
-            Debug.Console(1, this, "UpdatePowerFb: {0}", s);
             PowerIsOn = s.Contains("1");
             PowerIsOnFeedback.FireUpdate();
         }
@@ -585,7 +583,6 @@ namespace Epi.Display.Lg
         /// <param name="s">response from device</param>
         public void UpdateVolumeFb(string s)
         {
-            Debug.Console(1, this, "UpdateVolumeFb: {0}", s);
             ushort newVol;
             if (!ScaleVolume)
             {
@@ -614,7 +611,6 @@ namespace Epi.Display.Lg
         /// <param name="s">response from device</param>
         public void UpdateMuteFb(string s)
         {
-            Debug.Console(1, this, "UpdateMuteFb: {0}", s);
             IsMuted = s.Contains("1");
         }
 
