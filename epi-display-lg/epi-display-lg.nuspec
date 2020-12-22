@@ -8,11 +8,11 @@
     <owners>pepperdash</owners>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <license type="expression">MIT</license>
-    <projectUrl>https://github.com/PepperDash-Engineering/epi-display-lg</projectUrl>
+    <projectUrl>https://github.com/PepperDash/epi-display-lg</projectUrl>
     <copyright>Copyright 2020</copyright>
     <description>This software is a plugin designed to work as a part of PepperDash Essentials for Crestron control processors.  It provides control and feedback for LG Displays.</description>
     <tags>crestron 3series 4series</tags>
-    <repository type="git" url="https://github.com/PepperDash-Engineering/epi-display-lg"/>
+    <repository type="git" url="https://github.com/PepperDash/epi-display-lg"/>
     <dependencies>
       <dependency id="PepperDashEssentials" version="[1.6.8, 1.7.0)"/>
     </dependencies>
