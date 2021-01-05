@@ -349,35 +349,39 @@ namespace Epi.Display.Lg
 
         private void PortGather_LineReceived(object sender, GenericCommMethodReceiveTextArgs args)
         {
-            var data = args.Text.Trim().Replace("OK", "").Split(' ');
-
-
-            var command = data[0];
-            var id = data[1];
-            var responseValue = data[2];
-
-            if (!id.Equals(Id))
+            CrestronInvoke.BeginInvoke((o) =>
             {
-                Debug.Console(2, this, "Device ID Mismatch - Discarding Response");
-                return;
-            }
 
-            //command = 'ka' 
-            switch (command)
-            {
-                case ("a"):
-                    UpdatePowerFb(responseValue);
-                    break;
-                case ("b"):
-                    UpdateInputFb(responseValue);
-                    break;
-                case ("f"):
-                    UpdateVolumeFb(responseValue);
-                    break;
-                case ("e"):
-                    UpdateMuteFb(responseValue);
-                    break;
-            }
+                var data = args.Text.Trim().Replace("OK", "").Split(' ');
+
+
+                var command = data[0];
+                var id = data[1];
+                var responseValue = data[2];
+
+                if (!id.Equals(Id))
+                {
+                    Debug.Console(2, this, "Device ID Mismatch - Discarding Response");
+                    return;
+                }
+
+                //command = 'ka' 
+                switch (command)
+                {
+                    case ("a"):
+                        UpdatePowerFb(responseValue);
+                        break;
+                    case ("b"):
+                        UpdateInputFb(responseValue);
+                        break;
+                    case ("f"):
+                        UpdateVolumeFb(responseValue);
+                        break;
+                    case ("e"):
+                        UpdateMuteFb(responseValue);
+                        break;
+                }
+            });
 
         }
 
