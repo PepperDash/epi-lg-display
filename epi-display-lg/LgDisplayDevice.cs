@@ -72,8 +72,33 @@ namespace Epi.Display.Lg
             get { return _powerIsOn; }
             set
             {
+                if (_powerIsOn == value)
+                {
+                    return;
+                }
+
                 _powerIsOn = value;
-                PowerIsOnFeedback.FireUpdate();
+
+                if (_powerIsOn)
+                {
+                    IsWarmingUp = true;
+
+                    WarmupTimer = new CTimer(o =>
+                    {
+                        IsWarmingUp = false;
+                    }, WarmupTime);
+                }
+                else
+                {
+                    IsCoolingDown = true;
+
+                    CooldownTimer = new CTimer(o =>
+                    {
+                        IsCoolingDown = false;
+                    }, CooldownTime);
+                }
+                
+                PowerIsOnFeedback.FireUpdate();               
             }
         }
 
@@ -579,7 +604,7 @@ namespace Epi.Display.Lg
         public void UpdatePowerFb(string s)
         {
             PowerIsOn = s.Contains("1");
-            PowerIsOnFeedback.FireUpdate();
+            
         }
 
         /// <summary>
