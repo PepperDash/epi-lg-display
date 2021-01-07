@@ -325,6 +325,7 @@ namespace Epi.Display.Lg
             AddRoutingInputPort(
                 new RoutingInputPort(RoutingPortNames.HdmiIn2, eRoutingSignalType.Audio | eRoutingSignalType.Video,
                     eRoutingPortConnectionType.Hdmi, new Action(InputHdmi2), this), "91");
+
             AddRoutingInputPort(
                 new RoutingInputPort(RoutingPortNames.DisplayPortIn, eRoutingSignalType.Audio | eRoutingSignalType.Video,
                     eRoutingPortConnectionType.DisplayPort, new Action(InputDisplayPort), this), "C0");
@@ -655,11 +656,16 @@ namespace Epi.Display.Lg
         public void StatusGet()
         {
             //SendBytes(new byte[] { Header, StatusControlCmd, 0x00, 0x00, StatusControlGet, 0x00 });
-
-            PowerGet();
-            InputGet();
-            VolumeGet();
-            MuteGet();
+            CrestronInvoke.BeginInvoke((o) =>
+                {
+                    PowerGet();
+                    CrestronEnvironment.Sleep(100);
+                    InputGet();
+                    CrestronEnvironment.Sleep(100);
+                    VolumeGet();
+                    CrestronEnvironment.Sleep(100);
+                    MuteGet();
+                });
         }
 
 
