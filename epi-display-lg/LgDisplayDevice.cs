@@ -66,6 +66,8 @@ namespace Epi.Display.Lg
             _warmingTimeMs = props.warmingTimeMs > 0 ? props.warmingTimeMs : 8000;
             //UdpSocketKey = props.udpSocketKey;
 
+            InputNumberFeedback = new IntFeedback(() => _inputNumber);
+
             Init();
         }
 
