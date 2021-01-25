@@ -10,12 +10,17 @@ using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges;
 using PepperDash.Essentials.Core.Routing;
 
+using PepperDash_Essentials_Core.Queues;
+
 namespace Epi.Display.Lg
 {
     public class LgDisplayController : TwoWayDisplayBase, IBasicVolumeWithFeedback, ICommunicationMonitor,
         IBridgeAdvanced
 
     {
+
+        GenericQueue ReceiveQueue;
+
         public const int InputPowerOn = 101;
 
         public const int InputPowerOff = 102;
@@ -43,6 +48,8 @@ namespace Epi.Display.Lg
             : base(key, name)
         {
             Communication = comms;
+
+            ReceiveQueue = new GenericQueue(key + "-queue");
 
             var props = config;
             if (props == null)
@@ -375,40 +382,51 @@ namespace Epi.Display.Lg
 
         private void PortGather_LineReceived(object sender, GenericCommMethodReceiveTextArgs args)
         {
-            CrestronInvoke.BeginInvoke((o) =>
+            ReceiveQueue.Enqueue(new ProcessStringMessage(args.Text, ProcessResponse));
+        }
+
+        private void ProcessResponse(string s)
+        {
+            var data = s.Trim().Replace("OK", "").Split(' ');
+
+            string command;
+            string id;
+            string responseValue;
+
+            if (data.Length < 3)
             {
+                Debug.Console(2, this, "Unable to parse message, not enough data in message: {0}", s);
+                return;      
+            }
+            else
+            {
+                command = data[0];
+                id = data[1];
+                responseValue = data[2];
+            }
 
-                var data = args.Text.Trim().Replace("OK", "").Split(' ');
+            if (!id.Equals(Id))
+            {
+                Debug.Console(2, this, "Device ID Mismatch - Discarding Response");
+                return;
+            }
 
-
-                var command = data[0];
-                var id = data[1];
-                var responseValue = data[2];
-
-                if (!id.Equals(Id))
-                {
-                    Debug.Console(2, this, "Device ID Mismatch - Discarding Response");
-                    return;
-                }
-
-                //command = 'ka' 
-                switch (command)
-                {
-                    case ("a"):
-                        UpdatePowerFb(responseValue);
-                        break;
-                    case ("b"):
-                        UpdateInputFb(responseValue);
-                        break;
-                    case ("f"):
-                        UpdateVolumeFb(responseValue);
-                        break;
-                    case ("e"):
-                        UpdateMuteFb(responseValue);
-                        break;
-                }
-            });
-
+            //command = 'ka' 
+            switch (command)
+            {
+                case ("a"):
+                    UpdatePowerFb(responseValue);
+                    break;
+                case ("b"):
+                    UpdateInputFb(responseValue);
+                    break;
+                case ("f"):
+                    UpdateVolumeFb(responseValue);
+                    break;
+                case ("e"):
+                    UpdateMuteFb(responseValue);
+                    break;
+            }
         }
 
         private void AddRoutingInputPort(RoutingInputPort port, string fbMatch)
@@ -613,26 +631,33 @@ namespace Epi.Display.Lg
         /// <param name="s">response from device</param>
         public void UpdateVolumeFb(string s)
         {
-            ushort newVol;
-            if (!ScaleVolume)
+            try
             {
-                newVol = (ushort) NumericalHelpers.Scale(Convert.ToDouble(s), 0, 100, 0, 65535);
-            }
-            else
-            {
-                newVol = (ushort) NumericalHelpers.Scale(Convert.ToDouble(s), _lowerLimit, _upperLimit, 0, 65535);
-            }
-            if (!_volumeIsRamping)
-            {
-                _lastVolumeSent = newVol;
-            }
+                ushort newVol;
+                if (!ScaleVolume)
+                {
+                    newVol = (ushort)NumericalHelpers.Scale(Convert.ToDouble(s), 0, 100, 0, 65535);
+                }
+                else
+                {
+                    newVol = (ushort)NumericalHelpers.Scale(Convert.ToDouble(s), _lowerLimit, _upperLimit, 0, 65535);
+                }
+                if (!_volumeIsRamping)
+                {
+                    _lastVolumeSent = newVol;
+                }
 
-            if (newVol == _volumeLevelForSig)
-            {
-                return;
+                if (newVol == _volumeLevelForSig)
+                {
+                    return;
+                }
+                _volumeLevelForSig = newVol;
+                VolumeLevelFeedback.FireUpdate();
             }
-            _volumeLevelForSig = newVol;
-            VolumeLevelFeedback.FireUpdate();
+            catch (Exception e)
+            {
+                Debug.Console(2, this, "Error updating volumefb for value: {1}: {0}", e, s);
+            }
         }
 
         /// <summary>
