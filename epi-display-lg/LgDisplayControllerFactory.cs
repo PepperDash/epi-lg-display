@@ -10,7 +10,7 @@ namespace Epi.Display.Lg
         {
             TypeNames = new List<string> {"lgDisplay", "lgPlugin", "lg"};
 
-            MinimumEssentialsFrameworkVersion = "1.6.8";
+            MinimumEssentialsFrameworkVersion = "1.8.0";
         }
 
         #region Overrides of EssentialsDeviceFactory<LgDisplayController>
