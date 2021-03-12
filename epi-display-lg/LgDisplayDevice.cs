@@ -668,7 +668,23 @@ namespace Epi.Display.Lg
         /// <param name="s">response from device</param>
         public void UpdateMuteFb(string s)
         {
-            IsMuted = s.Contains("0");
+            try
+            {
+                var state = Convert.ToInt32(s);
+
+                if (state == 0)
+                {
+                    IsMuted = true;
+                }
+                else if (state == 1)
+                {
+                    IsMuted = false;
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.Console(2, this, "Unable to parse {0} to Int32 {1}", s, e);
+            }
         }
 
         /// <summary>
