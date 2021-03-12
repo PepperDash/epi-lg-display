@@ -220,7 +220,7 @@ namespace Epi.Display.Lg
         /// </summary>
         public void MuteOn()
         {
-            SendData(string.Format("ke {0} 1", Id));
+            SendData(string.Format("ke {0} 0", Id));
         }
 
         /// <summary>
@@ -228,7 +228,7 @@ namespace Epi.Display.Lg
         /// </summary>
         public void MuteOff()
         {
-            SendData(string.Format("ke {0} 0", Id));
+            SendData(string.Format("ke {0} 1", Id));
         }
 
         /// <summary>
