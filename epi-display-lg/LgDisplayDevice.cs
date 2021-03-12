@@ -668,7 +668,7 @@ namespace Epi.Display.Lg
         /// <param name="s">response from device</param>
         public void UpdateMuteFb(string s)
         {
-            IsMuted = s.Contains("1");
+            IsMuted = s.Contains("0");
         }
 
         /// <summary>
