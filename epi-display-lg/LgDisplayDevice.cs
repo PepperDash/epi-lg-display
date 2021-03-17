@@ -220,7 +220,7 @@ namespace Epi.Display.Lg
         /// </summary>
         public void MuteOn()
         {
-            SendData(string.Format("ke {0} 1", Id));
+            SendData(string.Format("ke {0} 0", Id));
         }
 
         /// <summary>
@@ -228,7 +228,7 @@ namespace Epi.Display.Lg
         /// </summary>
         public void MuteOff()
         {
-            SendData(string.Format("ke {0} 0", Id));
+            SendData(string.Format("ke {0} 1", Id));
         }
 
         /// <summary>
@@ -355,14 +355,16 @@ namespace Epi.Display.Lg
 
             AddRoutingInputPort(
                 new RoutingInputPort(RoutingPortNames.HdmiIn1, eRoutingSignalType.Audio | eRoutingSignalType.Video,
-                    eRoutingPortConnectionType.Hdmi, new Action(InputHdmi1), this), "90");
+                    eRoutingPortConnectionType.Hdmi, new Action(InputHdmi1), this), new string[] {"90"});
             AddRoutingInputPort(
                 new RoutingInputPort(RoutingPortNames.HdmiIn2, eRoutingSignalType.Audio | eRoutingSignalType.Video,
-                    eRoutingPortConnectionType.Hdmi, new Action(InputHdmi2), this), "91");
+                    eRoutingPortConnectionType.Hdmi, new Action(InputHdmi2), this), new string[] {"91"});
 
             AddRoutingInputPort(
                 new RoutingInputPort(RoutingPortNames.DisplayPortIn, eRoutingSignalType.Audio | eRoutingSignalType.Video,
-                    eRoutingPortConnectionType.DisplayPort, new Action(InputDisplayPort), this), "C0");
+                    eRoutingPortConnectionType.DisplayPort, new Action(InputDisplayPort), this), new string[]  {"C0", "D0"});
+
+
         }
 
         public override bool CustomActivate()
@@ -431,7 +433,7 @@ namespace Epi.Display.Lg
             }
         }
 
-        private void AddRoutingInputPort(RoutingInputPort port, string fbMatch)
+        private void AddRoutingInputPort(RoutingInputPort port, string[] fbMatch)
         {
             port.FeedbackMatchObject = fbMatch;
             InputPorts.Add(port);
@@ -596,7 +598,14 @@ namespace Epi.Display.Lg
         /// <param name="s">response from device</param>
         public void UpdateInputFb(string s)
         {
-            var newInput = InputPorts.FirstOrDefault(i => i.FeedbackMatchObject.Equals(s));
+            var newInput = InputPorts.FirstOrDefault(i => {
+                var array = i.FeedbackMatchObject as string[];
+                if (array == null)
+                {
+                    return false;
+                }
+                return array.Any().Equals(s);
+            });
             if (newInput != null && newInput != _currentInputPort)
             {
                 _currentInputPort = newInput;
@@ -668,7 +677,23 @@ namespace Epi.Display.Lg
         /// <param name="s">response from device</param>
         public void UpdateMuteFb(string s)
         {
-            IsMuted = s.Contains("1");
+            try
+            {
+                var state = Convert.ToInt32(s);
+
+                if (state == 0)
+                {
+                    IsMuted = true;
+                }
+                else if (state == 1)
+                {
+                    IsMuted = false;
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.Console(2, this, "Unable to parse {0} to Int32 {1}", s, e);
+            }
         }
 
         /// <summary>
