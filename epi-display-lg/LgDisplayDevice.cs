@@ -362,7 +362,7 @@ namespace Epi.Display.Lg
 
             AddRoutingInputPort(
                 new RoutingInputPort(RoutingPortNames.DisplayPortIn, eRoutingSignalType.Audio | eRoutingSignalType.Video,
-                    eRoutingPortConnectionType.DisplayPort, new Action(InputDisplayPort), this), "C0");
+                    eRoutingPortConnectionType.DisplayPort, new Action(InputDisplayPort), this), "c0");
         }
 
         public override bool CustomActivate()
@@ -596,7 +596,7 @@ namespace Epi.Display.Lg
         /// <param name="s">response from device</param>
         public void UpdateInputFb(string s)
         {
-            var newInput = InputPorts.FirstOrDefault(i => i.FeedbackMatchObject.Equals(s));
+            var newInput = InputPorts.FirstOrDefault(i => i.FeedbackMatchObject.Equals(s.ToLower()));
             if (newInput != null && newInput != _currentInputPort)
             {
                 _currentInputPort = newInput;
