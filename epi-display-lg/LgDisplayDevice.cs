@@ -389,6 +389,13 @@ namespace Epi.Display.Lg
 
         private void ProcessResponse(string s)
         {
+            if (s.ToLower().Contains("ng"))
+            {
+                Debug.Console(2, this, "Ignoring NG response: {0}", s);
+                return;
+            }
+
+
             var data = s.Trim().Replace("OK", "").Split(' ');
 
             string command;
