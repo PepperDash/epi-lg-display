@@ -371,7 +371,7 @@ namespace Epi.Display.Lg
         {
             Communication.Connect();
 
-            if (_isSerialComm)
+            if (_isSerialComm || _overrideWol)
             {
                 CommunicationMonitor.Start();
             }
