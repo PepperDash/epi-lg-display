@@ -65,7 +65,7 @@
     </Reference>
     <Reference Include="PepperDash_Essentials_DM, Version=1.3.7348.38761, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\PepperDashEssentials\lib\net35\PepperDash_Essentials_DM.dll</HintPath>
+      <HintPath>essentials-builds\PepperDash_Essentials_DM.dll</HintPath>
     </Reference>
     <Reference Include="SimplSharpCustomAttributesInterface, Version=1.0.0.0, Culture=neutral, PublicKeyToken=1099c178b3b54c3b, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>

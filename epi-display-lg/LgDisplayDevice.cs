@@ -504,7 +504,7 @@ namespace Epi.Display.Lg
         /// </summary>
         public void InputGet()
         {
-            SendData(string.Format("xb {0} FF", Id));
+            SendData(string.Format("kb {0} FF", Id));
         }
 
         /// <summary>
@@ -729,11 +729,11 @@ namespace Epi.Display.Lg
             CrestronInvoke.BeginInvoke((o) =>
                 {
                     PowerGet();
-                    CrestronEnvironment.Sleep(100);
+                    CrestronEnvironment.Sleep(1500);
                     InputGet();
-                    CrestronEnvironment.Sleep(100);
+                    CrestronEnvironment.Sleep(1500);
                     VolumeGet();
-                    CrestronEnvironment.Sleep(100);
+                    CrestronEnvironment.Sleep(1500);
                     MuteGet();
                 });
         }
