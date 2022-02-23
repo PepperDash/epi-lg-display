@@ -10,12 +10,17 @@ using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges;
 using PepperDash.Essentials.Core.Routing;
 
+using PepperDash.Essentials.Core.Queues;
+
 namespace Epi.Display.Lg
 {
     public class LgDisplayController : TwoWayDisplayBase, IBasicVolumeWithFeedback, ICommunicationMonitor,
         IBridgeAdvanced
 
     {
+
+        GenericQueue ReceiveQueue;
+
         public const int InputPowerOn = 101;
 
         public const int InputPowerOff = 102;
@@ -44,6 +49,8 @@ namespace Epi.Display.Lg
         {
             Communication = comms;
 
+            ReceiveQueue = new GenericQueue(key + "-queue");
+
             var props = config;
             if (props == null)
             {
@@ -59,6 +66,8 @@ namespace Epi.Display.Lg
             _warmingTimeMs = props.warmingTimeMs > 0 ? props.warmingTimeMs : 8000;
             //UdpSocketKey = props.udpSocketKey;
 
+            InputNumberFeedback = new IntFeedback(() => _inputNumber);
+
             Init();
         }
 
@@ -72,8 +81,33 @@ namespace Epi.Display.Lg
             get { return _powerIsOn; }
             set
             {
+                if (_powerIsOn == value)
+                {
+                    return;
+                }
+
                 _powerIsOn = value;
-                PowerIsOnFeedback.FireUpdate();
+
+                if (_powerIsOn)
+                {
+                    IsWarmingUp = true;
+
+                    WarmupTimer = new CTimer(o =>
+                    {
+                        IsWarmingUp = false;
+                    }, WarmupTime);
+                }
+                else
+                {
+                    IsCoolingDown = true;
+
+                    CooldownTimer = new CTimer(o =>
+                    {
+                        IsCoolingDown = false;
+                    }, CooldownTime);
+                }
+                
+                PowerIsOnFeedback.FireUpdate();               
             }
         }
 
@@ -186,7 +220,7 @@ namespace Epi.Display.Lg
         /// </summary>
         public void MuteOn()
         {
-            SendData(string.Format("ke {0} 1", Id));
+            SendData(string.Format("ke {0} {1}", Id, _smallDisplay ? "0" : "00"));
         }
 
         /// <summary>
@@ -194,7 +228,7 @@ namespace Epi.Display.Lg
         /// </summary>
         public void MuteOff()
         {
-            SendData(string.Format("ke {0} 0", Id));
+            SendData(string.Format("ke {0} {1}", Id, _smallDisplay ? "1" : "01"));
         }
 
         /// <summary>
@@ -325,9 +359,10 @@ namespace Epi.Display.Lg
             AddRoutingInputPort(
                 new RoutingInputPort(RoutingPortNames.HdmiIn2, eRoutingSignalType.Audio | eRoutingSignalType.Video,
                     eRoutingPortConnectionType.Hdmi, new Action(InputHdmi2), this), "91");
+
             AddRoutingInputPort(
                 new RoutingInputPort(RoutingPortNames.DisplayPortIn, eRoutingSignalType.Audio | eRoutingSignalType.Video,
-                    eRoutingPortConnectionType.DisplayPort, new Action(InputDisplayPort), this), "C0");
+                    eRoutingPortConnectionType.DisplayPort, new Action(InputDisplayPort), this), "c0");
         }
 
         public override bool CustomActivate()
@@ -349,40 +384,51 @@ namespace Epi.Display.Lg
 
         private void PortGather_LineReceived(object sender, GenericCommMethodReceiveTextArgs args)
         {
-            CrestronInvoke.BeginInvoke((o) =>
+            ReceiveQueue.Enqueue(new ProcessStringMessage(args.Text, ProcessResponse));
+        }
+
+        private void ProcessResponse(string s)
+        {
+            var data = s.Trim().Replace("OK", "").Split(' ');
+
+            string command;
+            string id;
+            string responseValue;
+
+            if (data.Length < 3)
             {
+                Debug.Console(2, this, "Unable to parse message, not enough data in message: {0}", s);
+                return;      
+            }
+            else
+            {
+                command = data[0];
+                id = data[1];
+                responseValue = data[2];
+            }
 
-                var data = args.Text.Trim().Replace("OK", "").Split(' ');
+            if (!id.Equals(Id))
+            {
+                Debug.Console(2, this, "Device ID Mismatch - Discarding Response");
+                return;
+            }
 
-
-                var command = data[0];
-                var id = data[1];
-                var responseValue = data[2];
-
-                if (!id.Equals(Id))
-                {
-                    Debug.Console(2, this, "Device ID Mismatch - Discarding Response");
-                    return;
-                }
-
-                //command = 'ka' 
-                switch (command)
-                {
-                    case ("a"):
-                        UpdatePowerFb(responseValue);
-                        break;
-                    case ("b"):
-                        UpdateInputFb(responseValue);
-                        break;
-                    case ("f"):
-                        UpdateVolumeFb(responseValue);
-                        break;
-                    case ("e"):
-                        UpdateMuteFb(responseValue);
-                        break;
-                }
-            });
-
+            //command = 'ka' 
+            switch (command)
+            {
+                case ("a"):
+                    UpdatePowerFb(responseValue);
+                    break;
+                case ("b"):
+                    UpdateInputFb(responseValue);
+                    break;
+                case ("f"):
+                    UpdateVolumeFb(responseValue);
+                    break;
+                case ("e"):
+                    UpdateMuteFb(responseValue);
+                    break;
+            }
         }
 
         private void AddRoutingInputPort(RoutingInputPort port, string fbMatch)
@@ -550,7 +596,7 @@ namespace Epi.Display.Lg
         /// <param name="s">response from device</param>
         public void UpdateInputFb(string s)
         {
-            var newInput = InputPorts.FirstOrDefault(i => i.FeedbackMatchObject.Equals(s));
+            var newInput = InputPorts.FirstOrDefault(i => i.FeedbackMatchObject.Equals(s.ToLower()));
             if (newInput != null && newInput != _currentInputPort)
             {
                 _currentInputPort = newInput;
@@ -578,7 +624,7 @@ namespace Epi.Display.Lg
         public void UpdatePowerFb(string s)
         {
             PowerIsOn = s.Contains("1");
-            PowerIsOnFeedback.FireUpdate();
+            
         }
 
         /// <summary>
@@ -587,26 +633,33 @@ namespace Epi.Display.Lg
         /// <param name="s">response from device</param>
         public void UpdateVolumeFb(string s)
         {
-            ushort newVol;
-            if (!ScaleVolume)
+            try
             {
-                newVol = (ushort) NumericalHelpers.Scale(Convert.ToDouble(s), 0, 100, 0, 65535);
-            }
-            else
-            {
-                newVol = (ushort) NumericalHelpers.Scale(Convert.ToDouble(s), _lowerLimit, _upperLimit, 0, 65535);
-            }
-            if (!_volumeIsRamping)
-            {
-                _lastVolumeSent = newVol;
-            }
+                ushort newVol;
+                if (!ScaleVolume)
+                {
+                    newVol = (ushort)NumericalHelpers.Scale(Convert.ToDouble(s), 0, 100, 0, 65535);
+                }
+                else
+                {
+                    newVol = (ushort)NumericalHelpers.Scale(Convert.ToDouble(s), _lowerLimit, _upperLimit, 0, 65535);
+                }
+                if (!_volumeIsRamping)
+                {
+                    _lastVolumeSent = newVol;
+                }
 
-            if (newVol == _volumeLevelForSig)
-            {
-                return;
+                if (newVol == _volumeLevelForSig)
+                {
+                    return;
+                }
+                _volumeLevelForSig = newVol;
+                VolumeLevelFeedback.FireUpdate();
             }
-            _volumeLevelForSig = newVol;
-            VolumeLevelFeedback.FireUpdate();
+            catch (Exception e)
+            {
+                Debug.Console(2, this, "Error updating volumefb for value: {1}: {0}", e, s);
+            }
         }
 
         /// <summary>
@@ -615,7 +668,23 @@ namespace Epi.Display.Lg
         /// <param name="s">response from device</param>
         public void UpdateMuteFb(string s)
         {
-            IsMuted = s.Contains("1");
+            try
+            {
+                var state = Convert.ToInt32(s);
+
+                if (state == 0)
+                {
+                    IsMuted = true;
+                }
+                else if (state == 1)
+                {
+                    IsMuted = false;
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.Console(2, this, "Unable to parse {0} to Int32 {1}", s, e);
+            }
         }
 
         /// <summary>
@@ -655,11 +724,16 @@ namespace Epi.Display.Lg
         public void StatusGet()
         {
             //SendBytes(new byte[] { Header, StatusControlCmd, 0x00, 0x00, StatusControlGet, 0x00 });
-
-            PowerGet();
-            InputGet();
-            VolumeGet();
-            MuteGet();
+            CrestronInvoke.BeginInvoke((o) =>
+                {
+                    PowerGet();
+                    CrestronEnvironment.Sleep(100);
+                    InputGet();
+                    CrestronEnvironment.Sleep(100);
+                    VolumeGet();
+                    CrestronEnvironment.Sleep(100);
+                    MuteGet();
+                });
         }
 
 
