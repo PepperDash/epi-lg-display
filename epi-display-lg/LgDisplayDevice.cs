@@ -635,14 +635,15 @@ namespace Epi.Display.Lg
         {
             try
             {
+                var vol = Int32.Parse(s, System.Globalization.NumberStyles.HexNumber);
                 ushort newVol;
                 if (!ScaleVolume)
                 {
-                    newVol = (ushort)NumericalHelpers.Scale(Convert.ToDouble(s), 0, 100, 0, 65535);
+                    newVol = (ushort)NumericalHelpers.Scale(Convert.ToDouble(vol), 0, 100, 0, 65535);
                 }
                 else
                 {
-                    newVol = (ushort)NumericalHelpers.Scale(Convert.ToDouble(s), _lowerLimit, _upperLimit, 0, 65535);
+                    newVol = (ushort)NumericalHelpers.Scale(Convert.ToDouble(vol), _lowerLimit, _upperLimit, 0, 65535);
                 }
                 if (!_volumeIsRamping)
                 {
