@@ -58,7 +58,7 @@ namespace Epi.Display.Lg
                 return;
             }
             _smallDisplay = props.SmallDisplay;
-            Id = string.IsNullOrEmpty(props.Id) ? props.Id : "01";
+            Id = !string.IsNullOrEmpty(props.Id) ? props.Id : "01";
             _upperLimit = props.volumeUpperLimit;
             _lowerLimit = props.volumeLowerLimit;
             _pollIntervalMs = props.pollIntervalMs > 1999 ? props.pollIntervalMs : 10000;
