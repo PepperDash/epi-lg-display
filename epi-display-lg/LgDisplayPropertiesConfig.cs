@@ -30,5 +30,8 @@ namespace Epi.Display.Lg
 
         [JsonProperty("smallDisplay")]
         public bool SmallDisplay { get; set; }
+
+        [JsonProperty("overrideWol")]
+        public bool OverrideWol { get; set; }
 	}
 }

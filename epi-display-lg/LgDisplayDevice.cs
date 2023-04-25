@@ -41,7 +41,8 @@ namespace Epi.Display.Lg
         private ActionIncrementer _volumeIncrementer;
         private bool _volumeIsRamping;
         private ushort _volumeLevelForSig;
-        private bool _smallDisplay;
+        private readonly bool _smallDisplay;
+        private readonly bool _overrideWol;
         //private GenericUdpServer _woLServer;
 
         public LgDisplayController(string key, string name, LgDisplayPropertiesConfig config, IBasicCommunication comms)
@@ -61,6 +62,7 @@ namespace Epi.Display.Lg
             Id = string.IsNullOrEmpty(props.Id) ? props.Id : "01";
             _upperLimit = props.volumeUpperLimit;
             _lowerLimit = props.volumeLowerLimit;
+            _overrideWol = props.OverrideWol;
             _pollIntervalMs = props.pollIntervalMs > 1999 ? props.pollIntervalMs : 10000;
             _coolingTimeMs = props.coolingTimeMs > 0 ? props.coolingTimeMs : 10000;
             _warmingTimeMs = props.warmingTimeMs > 0 ? props.warmingTimeMs : 8000;
@@ -369,7 +371,7 @@ namespace Epi.Display.Lg
         {
             Communication.Connect();
 
-            if (_isSerialComm)
+            if (_isSerialComm || _overrideWol)
             {
                 CommunicationMonitor.Start();
             }
@@ -509,7 +511,7 @@ namespace Epi.Display.Lg
         /// </summary>
         public void InputGet()
         {
-            SendData(string.Format("xb {0} FF", Id));
+            SendData(string.Format("kb {0} FF", Id));
         }
 
         /// <summary>
@@ -559,7 +561,7 @@ namespace Epi.Display.Lg
         /// </summary>
         public override void PowerOn()
         {
-            if (_isSerialComm)
+            if (_isSerialComm || _overrideWol)
             {
                 SendData(string.Format("ka {0} {1}", Id, _smallDisplay ? "1": "01"));
             }
@@ -735,11 +737,11 @@ namespace Epi.Display.Lg
             CrestronInvoke.BeginInvoke((o) =>
                 {
                     PowerGet();
-                    CrestronEnvironment.Sleep(100);
+                    CrestronEnvironment.Sleep(1500);
                     InputGet();
-                    CrestronEnvironment.Sleep(100);
+                    CrestronEnvironment.Sleep(1500);
                     VolumeGet();
-                    CrestronEnvironment.Sleep(100);
+                    CrestronEnvironment.Sleep(1500);
                     MuteGet();
                 });
         }
