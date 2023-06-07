@@ -17,6 +17,7 @@ namespace Epi.Display.Lg
 
         public override EssentialsDevice BuildDevice(DeviceConfig dc)
         {
+
             var comms = CommFactory.CreateCommForDevice(dc);
 
             if (comms == null) return null;
