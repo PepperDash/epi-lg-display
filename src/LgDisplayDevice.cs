@@ -11,12 +11,17 @@ using PepperDash.Essentials.Core.Bridges;
 using PepperDash.Essentials.Core.Routing;
 
 using PepperDash.Essentials.Core.Queues;
+using PepperDash.Essentials.Core.DeviceTypeInterfaces;
+using PepperDash.Essentials.Core.Fusion;
+using static Crestron.SimplSharpPro.DM.Audio;
 
 namespace Epi.Display.Lg
 {
     public class LgDisplayController : TwoWayDisplayBase, IBasicVolumeWithFeedback, ICommunicationMonitor,
         IBridgeAdvanced
-
+#if SERIES4
+        ,IHasInputs<string, string>
+#endif
     {
 
         GenericQueue ReceiveQueue;
@@ -301,6 +306,10 @@ namespace Epi.Display.Lg
 
         #endregion
 
+#if SERIES4
+        public ISelectableItems<string> Inputs { get; private set; }
+#endif
+
         private void Init()
         {
             WarmupTime = _warmingTimeMs > 0 ? _warmingTimeMs : 10000;
@@ -365,6 +374,10 @@ namespace Epi.Display.Lg
             AddRoutingInputPort(
                 new RoutingInputPort(RoutingPortNames.DisplayPortIn, eRoutingSignalType.Audio | eRoutingSignalType.Video,
                     eRoutingPortConnectionType.DisplayPort, new Action(InputDisplayPort), this), "c0");
+
+#if SERIES4
+            SetupInputs();
+#endif
         }
 
         public override bool CustomActivate()
@@ -378,6 +391,27 @@ namespace Epi.Display.Lg
 
             return base.CustomActivate();
         }
+
+#if SERIES4
+        private void SetupInputs()
+        {
+            Inputs = new LgInputs
+            {
+                Items = new Dictionary<string, ISelectableItem>
+                {
+                    {
+                        "90", new LgInput("90", "HDMI 1", this)},
+                    {
+
+                        "91", new LgInput("91", "HDMI 2", this)
+                    },
+                    {
+                        "c0", new LgInput("c0", "DisplayPort", this)
+                    },
+                }
+            };
+        }
+#endif
 
         private void CommunicationMonitor_StatusChange(object sender, MonitorStatusChangeEventArgs e)
         {
@@ -451,7 +485,7 @@ namespace Epi.Display.Lg
         /// 
         /// </summary>
         /// <param name="s"></param>
-        private void SendData(string s)
+        public void SendData(string s)
         {
             if (_lastCommandSentWasVolume)
             {
@@ -624,6 +658,19 @@ namespace Epi.Display.Lg
                         break;
                 }
             }
+
+#if SERIES4
+            if (Inputs.Items.ContainsKey(s))
+            {
+
+                foreach (var item in Inputs.Items)
+                {
+                    item.Value.IsSelected = item.Key.Equals(s);
+                }
+            }
+
+            Inputs.CurrentItem = s;
+#endif
         }
 
         /// <summary>
@@ -782,5 +829,17 @@ namespace Epi.Display.Lg
             Debug.Console(2, this, "Invalid Mad Address sent to WolFunction - {0}", macAddress);
             throw new ArgumentException("Invalid MAC Address");
         }
+
+#if SERIES4
+        public void SetInput(string selector)
+        {
+            var input = Inputs.Items[selector];
+
+            if(input != null)
+            {
+                input.Select();
+            }
+        }
+#endif
     }
 }
