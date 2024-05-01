@@ -1,4 +1,5 @@
-﻿using PepperDash.Essentials.Core.DeviceTypeInterfaces;
+﻿using Independentsoft.Exchange;
+using PepperDash.Essentials.Core.DeviceTypeInterfaces;
 using PepperDash.Essentials.Core.Queues;
 using System;
 using System.Collections.Generic;
@@ -89,7 +90,7 @@ namespace Epi.Display.Lg
 
         public void Select()
         {
-            _parent.SendData(Key);
+            _parent.SendData(string.Format($"xb {_parent.Id} {Key}"));
         }
     }
 #endif

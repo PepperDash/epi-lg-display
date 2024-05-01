@@ -13,7 +13,6 @@ using PepperDash.Essentials.Core.Routing;
 using PepperDash.Essentials.Core.Queues;
 using PepperDash.Essentials.Core.DeviceTypeInterfaces;
 using PepperDash.Essentials.Core.Fusion;
-using static Crestron.SimplSharpPro.DM.Audio;
 
 namespace Epi.Display.Lg
 {
