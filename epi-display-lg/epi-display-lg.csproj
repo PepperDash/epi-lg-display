@@ -97,6 +97,7 @@
   <ItemGroup>
     <Compile Include="LgDisplayControllerFactory.cs" />
     <Compile Include="LgDisplayDevice.cs" />
+    <Compile Include="LgDisplayJoinMap.cs" />
     <Compile Include="LgDisplayPropertiesConfig.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <None Include="Properties\ControlSystem.cfg" />

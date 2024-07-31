@@ -9,6 +9,9 @@ using PepperDash.Core;
 using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges;
 using PepperDash.Essentials.Core.Routing;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+
 
 using PepperDash.Essentials.Core.Queues;
 
@@ -16,7 +19,6 @@ namespace Epi.Display.Lg
 {
     public class LgDisplayController : TwoWayDisplayBase, IBasicVolumeWithFeedback, ICommunicationMonitor,
         IBridgeAdvanced
-
     {
 
         GenericQueue ReceiveQueue;
@@ -32,6 +34,7 @@ namespace Epi.Display.Lg
         private int _inputNumber;
         private bool _isCoolingDown;
         private bool _isMuted;
+        private bool _VideoIsMuted;
         private bool _isSerialComm;
         private bool _isWarmingUp;
         private bool _lastCommandSentWasVolume;
@@ -108,8 +111,8 @@ namespace Epi.Display.Lg
                         IsCoolingDown = false;
                     }, CooldownTime);
                 }
-                
-                PowerIsOnFeedback.FireUpdate();               
+
+                PowerIsOnFeedback.FireUpdate();
             }
         }
 
@@ -143,6 +146,19 @@ namespace Epi.Display.Lg
             }
         }
 
+        public bool VideoIsMuted
+        {
+            get
+            {
+                return _VideoIsMuted;
+            }
+            set
+            {
+                _VideoIsMuted = value;
+                VideoIsMutedFeedback.FireUpdate();
+            }
+        }
+
         private readonly int _lowerLimit;
         private readonly int _upperLimit;
         private readonly uint _coolingTimeMs;
@@ -163,7 +179,7 @@ namespace Epi.Display.Lg
         }
 
         private bool ScaleVolume { get; set; }
-        
+
         protected override Func<bool> PowerIsOnFeedbackFunc
         {
             get { return () => PowerIsOn; }
@@ -197,6 +213,12 @@ namespace Epi.Display.Lg
         public BoolFeedback MuteFeedback { get; private set; }
 
         /// <summary>
+        /// Video Mute Feedback Property
+        /// </summary>
+        public BoolFeedback VideoIsMutedFeedback { get; private set; }
+
+
+        /// <summary>
         /// Scales the level to the range of the display and sends the command
         /// Set: "kf [SetID] [Range 0x00 - 0x64]"
         /// </summary>
@@ -207,11 +229,11 @@ namespace Epi.Display.Lg
             _lastVolumeSent = level;
             if (!ScaleVolume)
             {
-                scaled = (int) NumericalHelpers.Scale(level, 0, 65535, 0, 100);
+                scaled = (int)NumericalHelpers.Scale(level, 0, 65535, 0, 100);
             }
             else
             {
-                scaled = (int) NumericalHelpers.Scale(level, 0, 65535, _lowerLimit, _upperLimit);
+                scaled = (int)NumericalHelpers.Scale(level, 0, 65535, _lowerLimit, _upperLimit);
             }
 
             SendData(string.Format("kf {0} {1}", Id, scaled));
@@ -245,6 +267,37 @@ namespace Epi.Display.Lg
             else
             {
                 MuteOn();
+            }
+        }
+
+        /// <summary>
+        /// Set VideoMute On
+        /// </summary>
+        public void VideoMuteOn()
+        {
+            SendData(string.Format("kd {0} {1}", Id, "01"));
+        }
+
+        /// <summary>
+        /// Set VideoMute Off
+        /// </summary>
+        public void VideoMuteOff()
+        {
+            SendData(string.Format("kd {0} {1}", Id, "00"));
+        }
+
+        /// <summary>
+        /// Toggle Current VideoMute State
+        /// </summary>
+        public void VideoMuteToggle()
+        {
+            if (VideoIsMuted)
+            {
+                VideoMuteOff();
+            }
+            else
+            {
+                VideoMuteOn();
             }
         }
 
@@ -288,9 +341,42 @@ namespace Epi.Display.Lg
 
         #region IBridgeAdvanced Members
 
+        /// <summary>
+        /// Calls the extension method to bridge the device to an EiscApi class (SIMPL Bridge)
+        /// </summary>
+        /// <param name="trilist"></param>
+        /// <param name="joinStart"></param>
+        /// <param name="joinMapKey"></param>
+
         public void LinkToApi(BasicTriList trilist, uint joinStart, string joinMapKey, EiscApiAdvanced bridge)
         {
             LinkDisplayToApi(this, trilist, joinStart, joinMapKey, bridge);
+
+            LgDisplayJoinMap joinMap = new LgDisplayJoinMap(joinStart);
+
+            var JoinMapSerialized = JoinMapHelper.GetJoinMapForDevice(joinMapKey);
+
+            if (!string.IsNullOrEmpty(JoinMapSerialized))
+                joinMap = JsonConvert.DeserializeObject<LgDisplayJoinMap>(JoinMapSerialized);
+
+            if (bridge != null)
+            {
+                bridge.AddJoinMap(Key, joinMap);
+            }
+
+            Debug.Console(1, "Linking to Trilist '{0}'", trilist.ID.ToString("X"));
+            Debug.Console(0, "Linking to Display: {0}", Name);
+
+            trilist.SetSigTrueAction(joinMap.VideoMuteOn.JoinNumber, this.VideoMuteOn);
+            trilist.SetSigTrueAction(joinMap.VideoMuteOff.JoinNumber, this.VideoMuteOff);
+            trilist.SetSigTrueAction(joinMap.VideoMuteToggle.JoinNumber, this.VideoMuteToggle);
+
+            VideoIsMutedFeedback.LinkInputSig(trilist.BooleanInput[joinMap.VideoMuteOn.JoinNumber]);
+            VideoIsMutedFeedback.LinkComplementInputSig(trilist.BooleanInput[joinMap.VideoMuteOff.JoinNumber]);
+            VideoIsMutedFeedback.LinkInputSig(trilist.BooleanInput[joinMap.VideoMuteToggle.JoinNumber]);
+
+
+            base.LinkDisplayToApi(this, trilist, joinStart, joinMapKey, bridge);
         }
 
         #endregion
@@ -339,7 +425,7 @@ namespace Epi.Display.Lg
             if (!ScaleVolume)
             {
                 _volumeIncrementer = new ActionIncrementer(655, 0, 65535, 800, 80,
-                    v => SetVolume((ushort) v),
+                    v => SetVolume((ushort)v),
                     () => _lastVolumeSent);
             }
             else
@@ -347,13 +433,14 @@ namespace Epi.Display.Lg
                 var scaleUpper = NumericalHelpers.Scale(_upperLimit, 0, 100, 0, 65535);
                 var scaleLower = NumericalHelpers.Scale(_lowerLimit, 0, 100, 0, 65535);
 
-                _volumeIncrementer = new ActionIncrementer(655, (int) scaleLower, (int) scaleUpper, 800, 80,
-                    v => SetVolume((ushort) v),
+                _volumeIncrementer = new ActionIncrementer(655, (int)scaleLower, (int)scaleUpper, 800, 80,
+                    v => SetVolume((ushort)v),
                     () => _lastVolumeSent);
             }
 
             MuteFeedback = new BoolFeedback(() => IsMuted);
             VolumeLevelFeedback = new IntFeedback(() => _volumeLevelForSig);
+            VideoIsMutedFeedback = new BoolFeedback(() => { return VideoIsMuted; });
 
             AddRoutingInputPort(
                 new RoutingInputPort(RoutingPortNames.HdmiIn1, eRoutingSignalType.Audio | eRoutingSignalType.Video,
@@ -398,7 +485,7 @@ namespace Epi.Display.Lg
             }
 
 
-            var data = s.Trim().Replace("OK", "").Split(' ');
+            var data = s.Trim().Replace("OK", "").Split(' '); //d 01 OK00x / d 01 01x
 
             string command;
             string id;
@@ -407,7 +494,7 @@ namespace Epi.Display.Lg
             if (data.Length < 3)
             {
                 Debug.Console(2, this, "Unable to parse message, not enough data in message: {0}", s);
-                return;      
+                return;
             }
             else
             {
@@ -436,6 +523,9 @@ namespace Epi.Display.Lg
                     break;
                 case ("e"):
                     UpdateMuteFb(responseValue);
+                    break;
+                case ("d"):
+                    UpdateVideoMuteFb(responseValue);
                     break;
             }
         }
@@ -515,6 +605,15 @@ namespace Epi.Display.Lg
         }
 
         /// <summary>
+        /// Poll VideoMute State
+        /// </summary>
+        public void VideoMuteGet()
+        {
+            SendData(string.Format("kd {0} FF", Id));
+        }
+
+
+        /// <summary>
         /// Executes a switch, turning on display if necessary.
         /// </summary>
         /// <param name="selector"></param>
@@ -563,7 +662,7 @@ namespace Epi.Display.Lg
         {
             if (_isSerialComm || _overrideWol)
             {
-                SendData(string.Format("ka {0} {1}", Id, _smallDisplay ? "1": "01"));
+                SendData(string.Format("ka {0} {1}", Id, _smallDisplay ? "1" : "01"));
             }
         }
 
@@ -633,7 +732,7 @@ namespace Epi.Display.Lg
         public void UpdatePowerFb(string s)
         {
             PowerIsOn = s.Contains("1");
-            
+
         }
 
         /// <summary>
@@ -698,6 +797,31 @@ namespace Epi.Display.Lg
         }
 
         /// <summary>
+        /// Process VideoMute Feedback from Response
+        /// </summary>
+        /// <param name="s">response from device</param>
+        public void UpdateVideoMuteFb(string s)
+        {
+            try
+            {
+                var state = Convert.ToInt32(s);
+
+                if (state == 0)
+                {
+                    VideoIsMuted = false;
+                }
+                else if (state == 1)
+                {
+                    VideoIsMuted = true;
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.Console(2, this, "Unable to parse {0} to Int32 {1}", s, e);
+            }
+        }
+
+        /// <summary>
         /// Updates Digital Route Feedback for Simpl EISC
         /// </summary>
         /// <param name="data">currently routed source</param>
@@ -735,15 +859,18 @@ namespace Epi.Display.Lg
         {
             //SendBytes(new byte[] { Header, StatusControlCmd, 0x00, 0x00, StatusControlGet, 0x00 });
             CrestronInvoke.BeginInvoke((o) =>
-                {
-                    PowerGet();
-                    CrestronEnvironment.Sleep(1500);
-                    InputGet();
-                    CrestronEnvironment.Sleep(1500);
-                    VolumeGet();
-                    CrestronEnvironment.Sleep(1500);
-                    MuteGet();
-                });
+            {
+                PowerGet();
+                CrestronEnvironment.Sleep(1500);
+                InputGet();
+                CrestronEnvironment.Sleep(1500);
+                VolumeGet();
+                CrestronEnvironment.Sleep(1500);
+                MuteGet();
+                CrestronEnvironment.Sleep(1500);
+                VideoMuteGet();
+
+            });
         }
 
 
