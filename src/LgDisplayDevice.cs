@@ -8,18 +8,22 @@ using Crestron.SimplSharpPro.DeviceSupport;
 using PepperDash.Core;
 using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges;
-using PepperDash.Essentials.Core.Routing;
-
 using PepperDash.Essentials.Core.Queues;
 using PepperDash.Essentials.Core.DeviceTypeInterfaces;
-using PepperDash.Essentials.Core.Fusion;
+
+
+#if SERIES4
+using TwoWayDisplayBase = PepperDash.Essentials.Devices.Common.Displays.TwoWayDisplayBase;
+#else
+using TwoWayDisplayBase = PepperDash.Essentials.Core.TwoWayDisplayBase;
+#endif
 
 namespace Epi.Display.Lg
 {
     public class LgDisplayController : TwoWayDisplayBase, IBasicVolumeWithFeedback, ICommunicationMonitor,
         IBridgeAdvanced
 #if SERIES4
-        ,IHasInputs<string, string>
+        ,IHasInputs<string>
 #endif
     {
 
@@ -40,7 +44,7 @@ namespace Epi.Display.Lg
         private bool _isWarmingUp;
         private bool _lastCommandSentWasVolume;
         private int _lastVolumeSent;
-        private CTimer _pollRing;
+        
         private bool _powerIsOn;
         private ActionIncrementer _volumeIncrementer;
         private bool _volumeIsRamping;
