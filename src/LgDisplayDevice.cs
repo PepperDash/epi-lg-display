@@ -836,9 +836,7 @@ namespace Epi.Display.Lg
 #if SERIES4
         public void SetInput(string selector)
         {
-            var input = Inputs.Items[selector];
-
-            if(input != null)
+            if (Inputs.Items.TryGetValue(selector, out var input))
             {
                 input.Select();
             }
