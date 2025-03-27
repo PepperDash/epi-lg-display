@@ -1,6 +1,6 @@
 ﻿using Newtonsoft.Json;
 
-namespace Epi.Display.Lg
+namespace PepperDash.Essentials.Plugins.Lg.Display
 {
 	public class LgDisplayPropertiesConfig
 	{

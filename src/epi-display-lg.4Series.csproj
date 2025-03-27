@@ -1,43 +1,43 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
- <PropertyGroup>
-    <ProjectType>ProgramLibrary</ProjectType>
-  </PropertyGroup>  
-  <PropertyGroup>
-    <TargetFramework>net472</TargetFramework>
-    <RootNamespace>PepperDash.Essentials.Plugins.Display.LG</RootNamespace>  
-    <Deterministic>false</Deterministic>
-    <AssemblyTitle>epi-lg-display</AssemblyTitle>
-    <Company>PepperDash Technologies</Company>
-    <Description>This software is a plugin designed to work as a part of PepperDash Essentials for Crestron control processors. This plugin allows for control LG Diplays.</Description>
-    <Copyright>Copyright 2024</Copyright>
-    <Version>1.0.0-local</Version>
-    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
-    <InformationalVersion>$(Version)</InformationalVersion>
-    <OutputPath>4Series\bin\$(Configuration)\</OutputPath>
-    <Authors>PepperDash Technologies</Authors>
-    <PackageId>PepperDash.Essentials.Plugin.4Series.LgDisplay</PackageId>
-    <PackageProjectUrl>https://github.com/PepperDash/epi-lg-display</PackageProjectUrl>
-    <PackageTags>crestron 4series lg display</PackageTags>
-  </PropertyGroup>  
-  
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <DefineConstants>$(DefineConstants);SERIES4</DefineConstants>
-  </PropertyGroup>  
+	<PropertyGroup>
+		<ProjectType>ProgramLibrary</ProjectType>
+	</PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net472</TargetFramework>
+		<RootNamespace>PepperDash.Essentials.Plugins.Lg.Display</RootNamespace>
+		<Deterministic>false</Deterministic>
+		<AssemblyTitle>epi-lg-display</AssemblyTitle>
+		<Company>PepperDash Technologies</Company>
+		<Description>This software is a plugin designed to work as a part of PepperDash Essentials for Crestron control processors. This plugin allows for control LG Diplays.</Description>
+		<Copyright>Copyright 2024</Copyright>
+		<Version>1.0.0-local</Version>
+		<GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+		<InformationalVersion>$(Version)</InformationalVersion>
+		<OutputPath>bin\$(Configuration)\</OutputPath>
+		<Authors>PepperDash Technologies</Authors>
+		<PackageId>PepperDash.Essentials.Plugins.LG.Display</PackageId>
+		<PackageProjectUrl>https://github.com/PepperDash/epi-lg-display</PackageProjectUrl>
+		<PackageTags>crestron 4series lg display</PackageTags>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+		<DefineConstants>$(DefineConstants);SERIES4</DefineConstants>
+	</PropertyGroup>
 
 
-  <ItemGroup>
-    <Compile Remove="Properties\**" />
-    <EmbeddedResource Remove="Properties\**" />
-    <None Remove="Properties\**" />
-  </ItemGroup>
+	<ItemGroup>
+		<Compile Remove="Properties\**" />
+		<EmbeddedResource Remove="Properties\**" />
+		<None Remove="Properties\**" />
+	</ItemGroup>
 
-  <ItemGroup>
-    <None Remove="epi-display-lg.projectinfo" />
-    <None Remove="PDT.EssentialsPluginTemplate.projectinfo" />
-  </ItemGroup>
+	<ItemGroup>
+		<None Remove="epi-display-lg.projectinfo" />
+		<None Remove="PDT.EssentialsPluginTemplate.projectinfo" />
+	</ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="PepperDashEssentials" Version="2.0.0-alpha-2565" />
-  </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="PepperDashEssentials" Version="2.0.0-alpha-2565" />
+	</ItemGroup>
 
 </Project>

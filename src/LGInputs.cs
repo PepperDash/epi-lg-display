@@ -1,13 +1,8 @@
-﻿using Independentsoft.Exchange;
-using PepperDash.Essentials.Core.DeviceTypeInterfaces;
-using PepperDash.Essentials.Core.Queues;
+﻿using PepperDash.Essentials.Core.DeviceTypeInterfaces;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace Epi.Display.Lg
+namespace PepperDash.Essentials.Plugins.Lg.Display
 {
 #if SERIES4
     public class LgInputs : ISelectableItems<string>

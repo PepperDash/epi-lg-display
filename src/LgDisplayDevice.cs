@@ -18,7 +18,7 @@ using TwoWayDisplayBase = PepperDash.Essentials.Devices.Common.Displays.TwoWayDi
 using TwoWayDisplayBase = PepperDash.Essentials.Core.TwoWayDisplayBase;
 #endif
 
-namespace Epi.Display.Lg
+namespace PepperDash.Essentials.Plugins.Lg.Display
 {
     public class LgDisplayController : TwoWayDisplayBase, IBasicVolumeWithFeedback, ICommunicationMonitor,
         IBridgeAdvanced
@@ -462,16 +462,16 @@ namespace Epi.Display.Lg
             //command = 'ka' 
             switch (command)
             {
-                case ("a"):
+                case "a":
                     UpdatePowerFb(responseValue);
                     break;
-                case ("b"):
+                case "b":
                     UpdateInputFb(responseValue);
                     break;
-                case ("f"):
+                case "f":
                     UpdateVolumeFb(responseValue);
                     break;
-                case ("e"):
+                case "e":
                     UpdateMuteFb(responseValue);
                     break;
             }
@@ -694,7 +694,7 @@ namespace Epi.Display.Lg
         {
             try
             {
-                var vol = Int32.Parse(s, System.Globalization.NumberStyles.HexNumber);
+                var vol = int.Parse(s, NumberStyles.HexNumber);
                 ushort newVol;
                 if (!ScaleVolume)
                 {
@@ -802,7 +802,7 @@ namespace Epi.Display.Lg
             if (Regex.IsMatch(macAddress, @"^([0-9A-Fa-f]{2}[\.:-]){5}([0-9A-Fa-f]{2})$") ||
                 Regex.IsMatch(macAddress, @"^([0-9A-Fa-f]{12})"))
             {
-                var address = (Regex.Replace(macAddress, @"(-|:|\.)", "")).ToLower();
+                var address = Regex.Replace(macAddress, @"(-|:|\.)", "").ToLower();
 
                 var counter = 0;
 

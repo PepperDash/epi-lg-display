@@ -1,8 +1,8 @@
-﻿using System.Collections.Generic;
-using PepperDash.Essentials.Core;
+﻿using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Config;
+using System.Collections.Generic;
 
-namespace Epi.Display.Lg
+namespace PepperDash.Essentials.Plugins.Lg.Display
 {
     public class LgDisplayControllerFactory:EssentialsPluginDeviceFactory<LgDisplayController>
     {
