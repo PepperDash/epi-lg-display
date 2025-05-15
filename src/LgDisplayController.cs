@@ -10,6 +10,8 @@ using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges;
 using PepperDash.Essentials.Core.Queues;
 using PepperDash.Essentials.Core.DeviceTypeInterfaces;
+using static Org.BouncyCastle.Math.EC.ECCurve;
+
 
 
 #if SERIES4
@@ -52,6 +54,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         private readonly bool _smallDisplay;
         private readonly bool _overrideWol;
         //private GenericUdpServer _woLServer;
+        private readonly LgDisplayPropertiesConfig _config;
+
 
         public LgDisplayController(string key, string name, LgDisplayPropertiesConfig config, IBasicCommunication comms)
             : base(key, name)
@@ -60,6 +64,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
             ReceiveQueue = new GenericQueue(key + "-queue");
 
+            _config = config;
             var props = config;
             if (props == null)
             {
@@ -413,7 +418,32 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     },
                 }
             };
-        }
+            ApplyFriendlyNames(_config);
+
+            }
+        private void ApplyFriendlyNames(LgDisplayPropertiesConfig config)
+            {
+            if (config?.FriendlyNames == null || Inputs == null || Inputs.Items == null)
+                return;
+
+            foreach (var friendly in config.FriendlyNames)
+                {
+                if (!string.IsNullOrEmpty(friendly.InputKey) && !string.IsNullOrEmpty(friendly.Name))
+                    {
+                    if (friendly.HideInput)
+                        {
+                        // Remove the input if hideInput is true
+                        Inputs.Items.Remove(friendly.InputKey);
+                        }
+                    else if (Inputs.Items.TryGetValue(friendly.InputKey, out var input))
+                        {
+                        // Create a new instance of the input with the updated name  
+                        var updatedInput = new LgInput(input.Key, friendly.Name, this);
+                        Inputs.Items[friendly.InputKey] = updatedInput;
+                        }
+                    }
+                }
+            }
 #endif
 
         private void CommunicationMonitor_StatusChange(object sender, MonitorStatusChangeEventArgs e)
