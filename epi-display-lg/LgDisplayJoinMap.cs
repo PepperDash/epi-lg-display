@@ -37,7 +37,7 @@ namespace Epi.Display.Lg
 			new JoinDataComplete(new JoinData { JoinNumber = 23, JoinSpan = 1 },
 			new JoinMetadata
 			{
-				Description = "VideoMuteOn",
+				Description = "VideoMuteToggle",
 				JoinCapabilities = eJoinCapabilities.ToFromSIMPL,
 				JoinType = eJoinType.Digital
 			});
