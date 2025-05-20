@@ -10,6 +10,9 @@
 *.userosscache
 *.sln.docstates
 
+# MacOs files
+._* 
+
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 
@@ -31,6 +34,7 @@ bld/
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
+[Oo]utput/
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/
@@ -359,3 +363,5 @@ MigrationBackup/
 # VS Code settings folders
 .vscode/
 *.projectinfo
+/output/epi-display-lg.4Series.1.0.0-local.cplz
+/src/._epi-display-lg.4Series.csproj
