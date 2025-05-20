@@ -48,7 +48,7 @@ jobs:
         run: nuget install .\packages.config -OutputDirectory .\packages -ExcludeVersion
       # Login to Docker
       - name: Login to Docker
-        uses: azure/docker-login@v1
+        uses: azure/docker-login@v3
         with:
           username: ${{ secrets.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -66,13 +66,13 @@ jobs:
         run: Write-Output "$($Env:VERSION)" | Out-File -FilePath "$($Env:GITHUB_HOME)\output\version.txt"
       # Upload output files
       - name: Upload Build Output
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v3
         with:
           name: Build
           path: ./${{ env.SOLUTION_FILE}}-${{ env.VERSION}}.zip
       # Upload the Version file as an artifact
       - name: Upload version.txt
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v3
         with:
           name: Version
           path: ${{env.GITHUB_HOME}}\output\version.txt
@@ -89,7 +89,7 @@ jobs:
       # Upload the build package to the release
       - name: Upload Release Package
         id: upload_release
-        uses: actions/upload-release-asset@v1
+        uses: actions/upload-release-asset@v3
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./${{ env.SOLUTION_FILE}}-${{ env.VERSION}}.zip
@@ -102,7 +102,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Download Build Version Info
-        uses: actions/download-artifact@v1
+        uses: actions/download-artifact@v3
         with:
           name: Version
       - name: Set Version Number
@@ -115,7 +115,7 @@ jobs:
           Remove-Item -Path ./Version/version.txt
           Remove-Item -Path ./Version
       - name: Download Build output
-        uses: actions/download-artifact@v1
+        uses: actions/download-artifact@v3
         with:
           name: Build
           path: ./
@@ -129,7 +129,7 @@ jobs:
           Get-ChildItem -Path .\output\* | Copy-Item -Destination .\
           Remove-Item -Path .\output -Recurse
       - name: Add nuget.exe
-        uses: nuget/setup-nuget@v1
+        uses: nuget/setup-nuget@v3
       - name: Add Github Packages source
         run: nuget sources add -name github -source https://nuget.pkg.github.com/pepperdash/index.json -username Pepperdash -password ${{ secrets.GITHUB_TOKEN }}
       # Pushes to nuget, not needed unless publishing publicly
