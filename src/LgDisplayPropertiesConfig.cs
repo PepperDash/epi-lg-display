@@ -1,4 +1,6 @@
 ﻿using Newtonsoft.Json;
+using PepperDash.Core;
+using System.Collections.Generic;
 
 namespace PepperDash.Essentials.Plugins.Lg.Display
 {
@@ -33,5 +35,26 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         [JsonProperty("overrideWol")]
         public bool OverrideWol { get; set; }
-	}
-}
+
+        [JsonProperty("friendlyNames")]
+        public List<FriendlyName> FriendlyNames { get; set; }
+
+        public LgDisplayPropertiesConfig()
+            {
+            FriendlyNames = new List<FriendlyName>();
+            }
+        }
+
+    public class FriendlyName
+       {
+        [JsonProperty("inputKey")]
+        public string InputKey { get; set; }
+
+        [JsonProperty("name")]
+        public string Name { get; set; }
+
+        [JsonProperty("hideInput")]
+        public bool HideInput { get; set; } 
+        }
+
+    }
