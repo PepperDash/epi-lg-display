@@ -85,7 +85,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         public void Select()
         {
-            _parent.SendData(string.Format($"xb {_parent.Id} {Key}"));
+            _parent.SendData($"xb {_parent.Id} {Key}");
         }
     }
 #endif
