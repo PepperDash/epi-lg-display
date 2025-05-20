@@ -10,10 +10,6 @@ using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges;
 using PepperDash.Essentials.Core.Queues;
 using PepperDash.Essentials.Core.DeviceTypeInterfaces;
-using static Org.BouncyCastle.Math.EC.ECCurve;
-
-
-
 #if SERIES4
 using TwoWayDisplayBase = PepperDash.Essentials.Devices.Common.Displays.TwoWayDisplayBase;
 #else
