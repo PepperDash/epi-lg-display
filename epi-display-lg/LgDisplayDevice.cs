@@ -306,7 +306,6 @@ namespace Epi.Display.Lg
             WarmupTime = _warmingTimeMs > 0 ? _warmingTimeMs : 10000;
             CooldownTime = _coolingTimeMs > 0 ? _coolingTimeMs : 8000;
 
-            _inputFeedback = new List<bool>();
             InputFeedback = new List<BoolFeedback>();
 
             if (_upperLimit != _lowerLimit && _upperLimit > _lowerLimit)
@@ -339,7 +338,7 @@ namespace Epi.Display.Lg
             if (!ScaleVolume)
             {
                 _volumeIncrementer = new ActionIncrementer(655, 0, 65535, 800, 80,
-                    v => SetVolume((ushort) v),
+                    v => SetVolume((ushort)v),
                     () => _lastVolumeSent);
             }
             else
@@ -347,8 +346,8 @@ namespace Epi.Display.Lg
                 var scaleUpper = NumericalHelpers.Scale(_upperLimit, 0, 100, 0, 65535);
                 var scaleLower = NumericalHelpers.Scale(_lowerLimit, 0, 100, 0, 65535);
 
-                _volumeIncrementer = new ActionIncrementer(655, (int) scaleLower, (int) scaleUpper, 800, 80,
-                    v => SetVolume((ushort) v),
+                _volumeIncrementer = new ActionIncrementer(655, (int)scaleLower, (int)scaleUpper, 800, 80,
+                    v => SetVolume((ushort)v),
                     () => _lastVolumeSent);
             }
 
@@ -365,6 +364,8 @@ namespace Epi.Display.Lg
             AddRoutingInputPort(
                 new RoutingInputPort(RoutingPortNames.DisplayPortIn, eRoutingSignalType.Audio | eRoutingSignalType.Video,
                     eRoutingPortConnectionType.DisplayPort, new Action(InputDisplayPort), this), "c0");
+                    
+            _inputFeedback = new List<bool>(new bool[InputPorts.Count + 1]);
         }
 
         public override bool CustomActivate()
@@ -705,6 +706,11 @@ namespace Epi.Display.Lg
         {
             try
             {
+                if (data < 0 || data >= _inputFeedback.Count)
+                {
+                    Debug.Console(2, this, "Input index {0} out of range for _inputFeedback (size {1})", data, _inputFeedback.Count);
+                    return;
+                }
                 if (_inputFeedback[data])
                 {
                     return;
