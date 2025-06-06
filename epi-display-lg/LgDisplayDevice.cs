@@ -400,7 +400,10 @@ namespace Epi.Display.Lg
                 return;
             }
 
-
+            //e 1 OK01x
+            //[0] = e
+            //[1] = 1
+            //[2] = 01x
             var data = s.Trim().Replace("OK", "").Split(' ');
 
             string command;
@@ -432,7 +435,7 @@ namespace Epi.Display.Lg
                     UpdatePowerFb(responseValue);
                     break;
                 case ("b"):
-                    UpdateInputFb(responseValue);
+                    UpdateInputFb(responseValue.Replace("x", ""));
                     break;
                 case ("f"):
                     UpdateVolumeFb(responseValue);
@@ -454,7 +457,7 @@ namespace Epi.Display.Lg
         /// 
         /// </summary>
         /// <param name="s"></param>
-        private void SendData(string s)
+        public void SendData(string s)
         {
             if (_lastCommandSentWasVolume)
             {
@@ -522,7 +525,7 @@ namespace Epi.Display.Lg
         /// </summary>
         public void InputGet()
         {
-            SendData(string.Format("kb {0} FF", Id));
+            SendData(string.Format("xb {0} FF", Id));
         }
 
         /// <summary>
@@ -616,7 +619,9 @@ namespace Epi.Display.Lg
         /// <param name="s">response from device</param>
         public void UpdateInputFb(string s)
         {
+            Debug.Console(2, this, "UpdateInputFb: {0}", s);
             var newInput = InputPorts.FirstOrDefault(i => i.FeedbackMatchObject.Equals(s.ToLower()));
+            Debug.Console(2, this, "UpdateInputFb: NewInput.Key = {0}", newInput.Key);
             if (newInput != null && newInput != _currentInputPort)
             {
                 _currentInputPort = newInput;
