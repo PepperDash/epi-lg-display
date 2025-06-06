@@ -364,9 +364,6 @@ namespace Epi.Display.Lg
                 new RoutingInputPort(RoutingPortNames.HdmiIn3, eRoutingSignalType.Audio | eRoutingSignalType.Video,
                     eRoutingPortConnectionType.Hdmi, new Action(InputHdmi3), this), "92");
             AddRoutingInputPort(
-                new RoutingInputPort(RoutingPortNames.HdmiIn4, eRoutingSignalType.Audio | eRoutingSignalType.Video,
-                    eRoutingPortConnectionType.Hdmi, new Action(InputHdmi4), this), "93");
-            AddRoutingInputPort(
                 new RoutingInputPort(RoutingPortNames.DisplayPortIn, eRoutingSignalType.Audio | eRoutingSignalType.Video,
                     eRoutingPortConnectionType.DisplayPort, new Action(InputDisplayPort), this), "c0");
                     
@@ -513,14 +510,6 @@ namespace Epi.Display.Lg
         }
 
         /// <summary>
-        /// Select Hdmi 4 Input
-        /// </summary>
-        public void InputHdmi4()
-        {
-            SendData(string.Format("xb {0} 93", Id));
-        }
-
-        /// <summary>
         /// Select DisplayPort Input
         /// </summary>
         public void InputDisplayPort()
@@ -643,9 +632,6 @@ namespace Epi.Display.Lg
                         break;
                     case "hdmiIn3":
                         InputNumber = 3;
-                        break;
-                    case "hdmiIn4":
-                        InputNumber = 4;
                         break;
                     case "displayPortIn":
                         InputNumber = 5;
