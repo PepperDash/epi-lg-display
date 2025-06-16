@@ -600,7 +600,7 @@ namespace Epi.Display.Lg
         {
             set
             {
-                if (value <= 0 || value >= InputPorts.Count) return;
+                if (value <= 0 || value > InputPorts.Count) return;
 
                 Debug.Console(3, this, "SetInput: value-'{0}'", value);
 
@@ -785,9 +785,10 @@ namespace Epi.Display.Lg
         {
             Debug.Console(2, this, "UpdateInputFb: {0}", s);
             var newInput = InputPorts.FirstOrDefault(i => i.FeedbackMatchObject.Equals(s.ToLower()));
-            Debug.Console(2, this, "UpdateInputFb: NewInput.Key = {0}", newInput.Key);
+            
             if (newInput != null && newInput != _currentInputPort)
             {
+                Debug.Console(2, this, "UpdateInputFb: NewInput.Key = {0}", newInput.Key);
                 _currentInputPort = newInput;
                 CurrentInputFeedback.FireUpdate();
                 var key = newInput.Key;
