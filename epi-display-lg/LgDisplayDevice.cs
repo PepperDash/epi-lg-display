@@ -9,20 +9,19 @@ using PepperDash.Core;
 using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges;
 using PepperDash.Essentials.Core.Routing;
-
 using PepperDash.Essentials.Core.Queues;
+using PepperDash.Essentials.Devices.Displays;
 
 namespace Epi.Display.Lg
 {
     public class LgDisplayController : TwoWayDisplayBase, IBasicVolumeWithFeedback, ICommunicationMonitor,
-        IBridgeAdvanced
+        IInputHdmi1, IInputHdmi2, IInputHdmi3, IInputDisplayPort1, IBridgeAdvanced
 
     {
 
         GenericQueue ReceiveQueue;
 
         public const int InputPowerOn = 101;
-
         public const int InputPowerOff = 102;
         public static List<string> InputKeys = new List<string>();
         public List<BoolFeedback> InputFeedback;
@@ -36,7 +35,6 @@ namespace Epi.Display.Lg
         private bool _isWarmingUp;
         private bool _lastCommandSentWasVolume;
         private int _lastVolumeSent;
-        private CTimer _pollRing;
         private bool _powerIsOn;
         private ActionIncrementer _volumeIncrementer;
         private bool _volumeIsRamping;
@@ -68,7 +66,13 @@ namespace Epi.Display.Lg
             _warmingTimeMs = props.warmingTimeMs > 0 ? props.warmingTimeMs : 8000;
             //UdpSocketKey = props.udpSocketKey;
 
-            InputNumberFeedback = new IntFeedback(() => _inputNumber);
+            //InputNumberFeedback = new IntFeedback(() => _inputNumber);
+
+            InputNumberFeedback = new IntFeedback(() =>
+            {
+                Debug.Console(2, this, "InputNumberFeedback: CurrentInputNumber-'{0}'", InputNumber);
+                return InputNumber;
+            });
 
             Init();
         }
@@ -181,7 +185,8 @@ namespace Epi.Display.Lg
 
         protected override Func<string> CurrentInputFeedbackFunc
         {
-            get { return () => _currentInputPort.Key; }
+            //get { return () => _currentInputPort.Key; }
+            get { return () => _currentInputPort != null ? _currentInputPort.Key : string.Empty; }
         }
 
         #region IBasicVolumeWithFeedback Members
@@ -288,9 +293,117 @@ namespace Epi.Display.Lg
 
         #region IBridgeAdvanced Members
 
+        //public void LinkToApi(BasicTriList trilist, uint joinStart, string joinMapKey, EiscApiAdvanced bridge)
+        //{
+        //    LinkDisplayToApi(this, trilist, joinStart, joinMapKey, bridge);
+        //}
+
+        /// <summary>
+        /// LinkToApi
+        /// </summary>
+        /// <param name="trilist"></param>
+        /// <param name="joinStart"></param>
+        /// <param name="joinMapKey"></param>
+        /// <param name="bridge"></param>
         public void LinkToApi(BasicTriList trilist, uint joinStart, string joinMapKey, EiscApiAdvanced bridge)
         {
-            LinkDisplayToApi(this, trilist, joinStart, joinMapKey, bridge);
+            var joinMap = new LgDisplayBridgeJoinMap(joinStart);
+
+            // This adds the join map to the collection on the bridge
+            if (bridge != null)
+            {
+                bridge.AddJoinMap(Key, joinMap);
+            }
+
+            var customJoins = JoinMapHelper.TryGetJoinMapAdvancedForDevice(joinMapKey);
+            if (customJoins != null)
+            {
+                joinMap.SetCustomJoinData(customJoins);
+            }
+
+            Debug.Console(0, this, "Linking to Trilist '{0}'", trilist.ID.ToString("X"));
+            Debug.Console(0, this, "Linking to Bridge Type {0}", GetType().Name);
+
+            // links to bridge
+            // device name
+            trilist.SetString(joinMap.Name.JoinNumber, Name);
+
+            //var twoWayDisplay = this as TwoWayDisplayBase;
+            //trilist.SetBool(joinMap.IsTwoWayDisplay.JoinNumber, twoWayDisplay != null);
+
+            if (CommunicationMonitor != null)
+            {
+                CommunicationMonitor.IsOnlineFeedback.LinkInputSig(trilist.BooleanInput[joinMap.IsOnline.JoinNumber]);
+            }
+
+            // power off
+            trilist.SetSigTrueAction(joinMap.PowerOff.JoinNumber, PowerOff);
+            PowerIsOnFeedback.LinkComplementInputSig(trilist.BooleanInput[joinMap.PowerOff.JoinNumber]);
+
+            // power on 
+            trilist.SetSigTrueAction(joinMap.PowerOn.JoinNumber, PowerOn);
+            PowerIsOnFeedback.LinkInputSig(trilist.BooleanInput[joinMap.PowerOn.JoinNumber]);
+
+            // input (digital select, digital feedback, names)
+            for (var i = 0; i < InputPorts.Count; i++)
+            {
+                var inputIndex = i;
+                var input = InputPorts.ElementAt(inputIndex);
+
+                if (input == null) continue;
+
+                trilist.SetSigTrueAction((ushort)(joinMap.InputSelectOffset.JoinNumber + inputIndex), () =>
+                {
+                    Debug.Console(2, this, "InputSelect Digital-'{0}'", inputIndex + 1);
+                    SetInput = inputIndex + 1;
+                });
+                Debug.Console(2, this, "Setting Input Select Action on Digital Join {0} to Input: {1}", joinMap.InputSelectOffset.JoinNumber + inputIndex, this.InputPorts[input.Key.ToString()].Key.ToString());
+
+                trilist.StringInput[(ushort)(joinMap.InputNamesOffset.JoinNumber + inputIndex)].StringValue = string.IsNullOrEmpty(input.Key) ? string.Empty : input.Key;
+
+                if (InputFeedback != null && inputIndex < InputFeedback.Count)
+                {
+                    InputFeedback[inputIndex].LinkInputSig(trilist.BooleanInput[joinMap.InputSelectOffset.JoinNumber + (uint)inputIndex]);
+                }
+            }
+
+            // input (analog select)
+            trilist.SetUShortSigAction(joinMap.InputSelect.JoinNumber, analogValue =>
+            {
+                Debug.Console(2, this, "InputSelect Analog-'{0}'", analogValue);
+                SetInput = analogValue;
+            });
+
+            // input (analog feedback)
+            if (InputNumberFeedback != null)
+                InputNumberFeedback.LinkInputSig(trilist.UShortInput[joinMap.InputSelect.JoinNumber]);
+
+            if (CurrentInputFeedback != null)
+                CurrentInputFeedback.OutputChange += (sender, args) => Debug.Console(1, this, "CurrentInputFeedback: {0}", args.StringValue);
+
+            // bridge online change
+            trilist.OnlineStatusChange += (sender, args) =>
+            {
+                if (!args.DeviceOnLine) return;
+
+                // device name
+                trilist.SetString(joinMap.Name.JoinNumber, Name);
+
+                PowerIsOnFeedback.FireUpdate();
+
+                if (CurrentInputFeedback != null)
+                    CurrentInputFeedback.FireUpdate();
+
+                if (InputNumberFeedback != null)
+                    InputNumberFeedback.FireUpdate();
+
+                for (var i = 0; i < InputPorts.Count; i++)
+                {
+                    var inputIndex = i;
+                    if (InputFeedback != null)
+                        InputFeedback[inputIndex].FireUpdate();
+                }
+            };
         }
 
         #endregion
@@ -365,9 +478,17 @@ namespace Epi.Display.Lg
                     eRoutingPortConnectionType.Hdmi, new Action(InputHdmi3), this), "92");
             AddRoutingInputPort(
                 new RoutingInputPort(RoutingPortNames.DisplayPortIn, eRoutingSignalType.Audio | eRoutingSignalType.Video,
-                    eRoutingPortConnectionType.DisplayPort, new Action(InputDisplayPort), this), "c0");
-                    
+                    eRoutingPortConnectionType.DisplayPort, new Action(InputDisplayPort1), this), "c0");
+
             _inputFeedback = new List<bool>(new bool[InputPorts.Count + 1]);
+            
+                // Initialize InputFeedback with a BoolFeedback for each input
+            InputFeedback = new List<BoolFeedback>();
+            for (int i = 0; i < InputPorts.Count; i++)
+            {
+                int index = i + 1; // 1-based index to match InputNumber logic
+                InputFeedback.Add(new BoolFeedback(() => _inputFeedback[index]));
+            }
         }
 
         public override bool CustomActivate()
@@ -473,6 +594,49 @@ namespace Epi.Display.Lg
         }
 
         /// <summary>
+        /// Sets the requested input
+        /// </summary>
+        private int SetInput
+        {
+            set
+            {
+                if (value <= 0 || value >= InputPorts.Count) return;
+
+                Debug.Console(3, this, "SetInput: value-'{0}'", value);
+
+                // -1 to get actual input in list after 0d check
+                var port = GetInputPort(value - 1);
+                if (port == null)
+                {
+                    Debug.Console(3, this, "SetInput: failed to get input port");
+                    return;
+                }
+
+                Debug.Console(2, this, "SetInput: port.key-'{0}', port.Selector-'{1}', port.ConnectionType-'{2}', port.FeebackMatchObject-'{3}'",
+                    port.Key, port.Selector, port.ConnectionType, port.FeedbackMatchObject);
+
+                ExecuteSwitch(port.Selector);
+            }
+        }
+
+        private RoutingInputPort GetInputPort(int input)
+        {
+            return InputPorts.ElementAt(input);
+        }
+
+        /// <summary>
+        /// Lists available input routing ports
+        /// </summary>
+        public void ListRoutingInputPorts()
+        {
+            foreach (var inputPort in InputPorts)
+            {
+                Debug.Console(0, this, "ListRoutingInputPorts: key-'{0}', connectionType-'{1}', feedbackMatchObject-'{2}'",
+                    inputPort.Key, inputPort.ConnectionType, inputPort.FeedbackMatchObject);
+            }
+        }
+
+        /// <summary>
         /// Poll Mute State
         /// </summary>
         public void MuteGet()
@@ -515,7 +679,7 @@ namespace Epi.Display.Lg
         /// <summary>
         /// Select DisplayPort Input
         /// </summary>
-        public void InputDisplayPort()
+        public void InputDisplayPort1()
         {
             SendData(string.Format("xb {0} C0", Id));
         }
@@ -639,7 +803,7 @@ namespace Epi.Display.Lg
                         InputNumber = 3;
                         break;
                     case "displayPortIn":
-                        InputNumber = 5;
+                        InputNumber = 4;
                         break;
                 }
             }
