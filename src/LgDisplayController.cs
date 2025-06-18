@@ -10,6 +10,8 @@ using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges;
 using PepperDash.Essentials.Core.Queues;
 using PepperDash.Essentials.Core.DeviceTypeInterfaces;
+using PepperDash.Essentials.Devices.Displays;
+
 #if SERIES4
 using TwoWayDisplayBase = PepperDash.Essentials.Devices.Common.Displays.TwoWayDisplayBase;
 #else
@@ -19,7 +21,7 @@ using TwoWayDisplayBase = PepperDash.Essentials.Core.TwoWayDisplayBase;
 namespace PepperDash.Essentials.Plugins.Lg.Display
 {
     public class LgDisplayController : TwoWayDisplayBase, IBasicVolumeWithFeedback, ICommunicationMonitor,
-        IBridgeAdvanced
+        IInputHdmi1, IInputHdmi2, IInputHdmi3, IInputDisplayPort1, IBridgeAdvanced
 #if SERIES4
         ,IHasInputs<string>
 #endif
@@ -379,7 +381,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     eRoutingPortConnectionType.Hdmi, new Action(InputHdmi3), this), "92");
             AddRoutingInputPort(
                 new RoutingInputPort(RoutingPortNames.DisplayPortIn, eRoutingSignalType.Audio | eRoutingSignalType.Video,
-                    eRoutingPortConnectionType.DisplayPort, new Action(InputDisplayPort), this), "c0");
+                    eRoutingPortConnectionType.DisplayPort, new Action(InputDisplayPort1), this), "c0");
 
             _inputFeedback = new List<bool>(new bool[InputPorts.Count + 1]);
 
@@ -588,7 +590,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// <summary>
         /// Select DisplayPort Input
         /// </summary>
-        public void InputDisplayPort()
+        public void InputDisplayPort1()
         {
             SendData(string.Format("xb {0} C0", Id));
         }
