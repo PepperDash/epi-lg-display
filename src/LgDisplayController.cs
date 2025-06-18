@@ -379,6 +379,16 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 new RoutingInputPort(RoutingPortNames.DisplayPortIn, eRoutingSignalType.Audio | eRoutingSignalType.Video,
                     eRoutingPortConnectionType.DisplayPort, new Action(InputDisplayPort), this), "c0");
 
+            _inputFeedback = new List<bool>(new bool[InputPorts.Count + 1]);
+
+            // Initialize InputFeedback with a BoolFeedback for each input
+            InputFeedback = new List<BoolFeedback>();
+            for (int i = 0; i < InputPorts.Count; i++)
+            {
+                int index = i + 1; // 1-based index to match InputNumber logic
+                InputFeedback.Add(new BoolFeedback(() => _inputFeedback[index]));
+            }
+
 #if SERIES4
             SetupInputs();
 #endif
