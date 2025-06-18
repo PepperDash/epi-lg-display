@@ -374,7 +374,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             AddRoutingInputPort(
                 new RoutingInputPort(RoutingPortNames.HdmiIn2, eRoutingSignalType.Audio | eRoutingSignalType.Video,
                     eRoutingPortConnectionType.Hdmi, new Action(InputHdmi2), this), "91");
-
+            AddRoutingInputPort(
+                new RoutingInputPort(RoutingPortNames.HdmiIn3, eRoutingSignalType.Audio | eRoutingSignalType.Video,
+                    eRoutingPortConnectionType.Hdmi, new Action(InputHdmi3), this), "92");
             AddRoutingInputPort(
                 new RoutingInputPort(RoutingPortNames.DisplayPortIn, eRoutingSignalType.Audio | eRoutingSignalType.Video,
                     eRoutingPortConnectionType.DisplayPort, new Action(InputDisplayPort), this), "c0");
@@ -418,6 +420,10 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     {
 
                         "91", new LgInput("91", "HDMI 2", this)
+                    },
+                    {
+
+                        "92", new LgInput("92", "HDMI 3", this)
                     },
                     {
                         "c0", new LgInput("c0", "DisplayPort", this)
@@ -572,6 +578,14 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         }
 
         /// <summary>
+        /// Select Hdmi 3 Input
+        /// </summary>
+        public void InputHdmi3()
+        {
+            SendData(string.Format("xb {0} 92", Id));
+        }
+
+        /// <summary>
         /// Select DisplayPort Input
         /// </summary>
         public void InputDisplayPort()
@@ -692,8 +706,11 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     case "hdmiIn2":
                         InputNumber = 2;
                         break;
-                    case "displayPortIn":
+                    case "hdmiIn3":
                         InputNumber = 3;
+                        break;
+                    case "displayPortIn":
+                        InputNumber = 4;
                         break;
                 }
             }
