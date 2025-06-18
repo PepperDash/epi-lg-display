@@ -12,23 +12,14 @@ using PepperDash.Essentials.Core.Queues;
 using PepperDash.Essentials.Core.DeviceTypeInterfaces;
 using PepperDash.Essentials.Devices.Displays;
 using Epi.Display.Lg;
-
-
-#if SERIES4
 using TwoWayDisplayBase = PepperDash.Essentials.Devices.Common.Displays.TwoWayDisplayBase;
-#else
-using TwoWayDisplayBase = PepperDash.Essentials.Core.TwoWayDisplayBase;
-#endif
+
 
 namespace PepperDash.Essentials.Plugins.Lg.Display
 {
     public class LgDisplayController : TwoWayDisplayBase, IBasicVolumeWithFeedback, ICommunicationMonitor,
-        IInputHdmi1, IInputHdmi2, IInputHdmi3, IInputDisplayPort1, IBridgeAdvanced
-#if SERIES4
-        ,IHasInputs<string>
-#endif
+        IInputHdmi1, IInputHdmi2, IInputHdmi3, IInputDisplayPort1, IBridgeAdvanced ,IHasInputs<string>
     {
-
         GenericQueue ReceiveQueue;
         public const int InputPowerOn = 101;
         public const int InputPowerOff = 102;
@@ -411,9 +402,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         #endregion
 
-#if SERIES4
         public ISelectableItems<string> Inputs { get; private set; }
-#endif
 
         private void Init()
         {
@@ -492,9 +481,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 InputFeedback.Add(new BoolFeedback(() => _inputFeedback[index]));
             }
 
-#if SERIES4
             SetupInputs();
-#endif
         }
 
         public override bool CustomActivate()
@@ -509,7 +496,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             return base.CustomActivate();
         }
 
-#if SERIES4
         private void SetupInputs()
         {
             Inputs = new LgInputs
@@ -556,7 +542,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     }
                 }
             }
-#endif
 
         private void CommunicationMonitor_StatusChange(object sender, MonitorStatusChangeEventArgs e)
         {
@@ -863,7 +848,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 }
             }
 
-#if SERIES4
             if (Inputs.Items.ContainsKey(s))
             {
 
@@ -874,7 +858,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
 
             Inputs.CurrentItem = s;
-#endif
         }
 
         /// <summary>

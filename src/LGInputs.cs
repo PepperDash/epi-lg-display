@@ -4,7 +4,6 @@ using System.Collections.Generic;
 
 namespace PepperDash.Essentials.Plugins.Lg.Display
 {
-#if SERIES4
     public class LgInputs : ISelectableItems<string>
     {
         private Dictionary<string, ISelectableItem> _items = new Dictionary<string, ISelectableItem>();
@@ -88,5 +87,4 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             _parent.SendData($"xb {_parent.Id} {Key}");
         }
     }
-#endif
 }
