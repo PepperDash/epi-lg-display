@@ -28,9 +28,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
     {
 
         GenericQueue ReceiveQueue;
-
         public const int InputPowerOn = 101;
-
         public const int InputPowerOff = 102;
         public static List<string> InputKeys = new List<string>();
         public List<BoolFeedback> InputFeedback;
@@ -43,8 +41,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         private bool _isSerialComm;
         private bool _isWarmingUp;
         private bool _lastCommandSentWasVolume;
-        private int _lastVolumeSent;
-        
+        private int _lastVolumeSent;        
         private bool _powerIsOn;
         private ActionIncrementer _volumeIncrementer;
         private bool _volumeIsRamping;
@@ -78,8 +75,12 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             _coolingTimeMs = props.coolingTimeMs > 0 ? props.coolingTimeMs : 10000;
             _warmingTimeMs = props.warmingTimeMs > 0 ? props.warmingTimeMs : 8000;
             //UdpSocketKey = props.udpSocketKey;
-
-            InputNumberFeedback = new IntFeedback(() => _inputNumber);
+     
+            InputNumberFeedback = new IntFeedback(() =>
+            {
+                Debug.Console(2, this, "InputNumberFeedback: CurrentInputNumber-'{0}'", InputNumber);
+                return InputNumber;
+            });
 
             Init();
         }
@@ -191,8 +192,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         }
 
         protected override Func<string> CurrentInputFeedbackFunc
-        {
-            get { return () => _currentInputPort.Key; }
+        {     
+            get { return () => _currentInputPort != null ? _currentInputPort.Key : string.Empty; }
         }
 
         #region IBasicVolumeWithFeedback Members
