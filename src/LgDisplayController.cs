@@ -11,6 +11,8 @@ using PepperDash.Essentials.Core.Bridges;
 using PepperDash.Essentials.Core.Queues;
 using PepperDash.Essentials.Core.DeviceTypeInterfaces;
 using PepperDash.Essentials.Devices.Displays;
+using Epi.Display.Lg;
+
 
 #if SERIES4
 using TwoWayDisplayBase = PepperDash.Essentials.Devices.Common.Displays.TwoWayDisplayBase;
@@ -63,7 +65,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             var props = config;
             if (props == null)
             {
-                Debug.Console(0, this, Debug.ErrorLogLevel.Error, "Display configuration must be included");
+                Debug.LogError(this,"Display configuration must be included");                               
                 return;
             }
             _smallDisplay = props.SmallDisplay;
@@ -78,7 +80,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
      
             InputNumberFeedback = new IntFeedback(() =>
             {
-                Debug.Console(2, this, "InputNumberFeedback: CurrentInputNumber-'{0}'", InputNumber);
+                Debug.LogVerbose(this, "InputNumberFeedback: CurrentInputNumber-'{0}'", InputNumber);
                 return InputNumber;
             });
 
@@ -302,7 +304,103 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         public void LinkToApi(BasicTriList trilist, uint joinStart, string joinMapKey, EiscApiAdvanced bridge)
         {
-            LinkDisplayToApi(this, trilist, joinStart, joinMapKey, bridge);
+            var joinMap = new LgDisplayBridgeJoinMap(joinStart);
+
+            // This adds the join map to the collection on the bridge
+            if (bridge != null)
+            {
+                bridge.AddJoinMap(Key, joinMap);
+            }
+
+            var customJoins = JoinMapHelper.TryGetJoinMapAdvancedForDevice(joinMapKey);
+            if (customJoins != null)
+            {
+                joinMap.SetCustomJoinData(customJoins);
+            }
+
+            Debug.LogInformation(this, "Linking to Trilist '{0}'", trilist.ID.ToString("X"));
+            Debug.LogInformation(this, "Linking to Bridge Type {0}", GetType().Name);
+
+            // links to bridge
+            // device name
+            trilist.SetString(joinMap.Name.JoinNumber, Name);
+
+            //var twoWayDisplay = this as TwoWayDisplayBase;
+            //trilist.SetBool(joinMap.IsTwoWayDisplay.JoinNumber, twoWayDisplay != null);
+
+            if (CommunicationMonitor != null)
+            {
+                CommunicationMonitor.IsOnlineFeedback.LinkInputSig(trilist.BooleanInput[joinMap.IsOnline.JoinNumber]);
+            }
+
+            // power off
+            trilist.SetSigTrueAction(joinMap.PowerOff.JoinNumber, PowerOff);
+            PowerIsOnFeedback.LinkComplementInputSig(trilist.BooleanInput[joinMap.PowerOff.JoinNumber]);
+
+            // power on 
+            trilist.SetSigTrueAction(joinMap.PowerOn.JoinNumber, PowerOn);
+            PowerIsOnFeedback.LinkInputSig(trilist.BooleanInput[joinMap.PowerOn.JoinNumber]);
+
+            // input (digital select, digital feedback, names)
+            for (var i = 0; i < InputPorts.Count; i++)
+            {
+                var inputIndex = i;
+                var input = InputPorts.ElementAt(inputIndex);
+
+                if (input == null) continue;
+
+                trilist.SetSigTrueAction((ushort)(joinMap.InputSelectOffset.JoinNumber + inputIndex), () =>
+                {
+                    Debug.LogVerbose(this, "InputSelect Digital-'{0}'", inputIndex + 1);
+                    SetInput = inputIndex + 1;
+                });
+                Debug.LogVerbose(this, "Setting Input Select Action on Digital Join {0} to Input: {1}", joinMap.InputSelectOffset.JoinNumber + inputIndex, this.InputPorts[input.Key.ToString()].Key.ToString());
+
+                trilist.StringInput[(ushort)(joinMap.InputNamesOffset.JoinNumber + inputIndex)].StringValue = string.IsNullOrEmpty(input.Key) ? string.Empty : input.Key;
+
+                if (InputFeedback != null && inputIndex < InputFeedback.Count)
+                {
+                    InputFeedback[inputIndex].LinkInputSig(trilist.BooleanInput[joinMap.InputSelectOffset.JoinNumber + (uint)inputIndex]);
+                }
+            }
+
+            // input (analog select)
+            trilist.SetUShortSigAction(joinMap.InputSelect.JoinNumber, analogValue =>
+            {
+                Debug.LogVerbose(this, "InputSelect Analog-'{0}'", analogValue);
+                SetInput = analogValue;
+            });
+
+            // input (analog feedback)
+            if (InputNumberFeedback != null)
+                InputNumberFeedback.LinkInputSig(trilist.UShortInput[joinMap.InputSelect.JoinNumber]);
+
+            if (CurrentInputFeedback != null)
+                CurrentInputFeedback.OutputChange += (sender, args) => Debug.LogDebug(this, "CurrentInputFeedback: {0}", args.StringValue);
+
+            // bridge online change
+            trilist.OnlineStatusChange += (sender, args) =>
+            {
+                if (!args.DeviceOnLine) return;
+
+                // device name
+                trilist.SetString(joinMap.Name.JoinNumber, Name);
+
+                PowerIsOnFeedback.FireUpdate();
+
+                if (CurrentInputFeedback != null)
+                    CurrentInputFeedback.FireUpdate();
+
+                if (InputNumberFeedback != null)
+                    InputNumberFeedback.FireUpdate();
+
+                for (var i = 0; i < InputPorts.Count; i++)
+                {
+                    var inputIndex = i;
+                    if (InputFeedback != null)
+                        InputFeedback[inputIndex].FireUpdate();
+                }
+            };
         }
 
         #endregion
@@ -337,7 +435,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             if (socket != null)
             {
                 //This Instance Uses IP Control
-                Debug.Console(2, this, "The LG Display Plugin does NOT support IP Control currently");
+                Debug.LogVerbose(this, "The LG Display Plugin does NOT support IP Control currently");
             }
             else
             {
@@ -419,13 +517,12 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 Items = new Dictionary<string, ISelectableItem>
                 {
                     {
-                        "90", new LgInput("90", "HDMI 1", this)},
+                        "90", new LgInput("90", "HDMI 1", this)
+                    },
                     {
-
                         "91", new LgInput("91", "HDMI 2", this)
                     },
                     {
-
                         "92", new LgInput("92", "HDMI 3", this)
                     },
                     {
@@ -475,11 +572,14 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             if (s.ToLower().Contains("ng"))
             {
-                Debug.Console(2, this, "Ignoring NG response: {0}", s);
+                Debug.LogVerbose(this, "Ignoring NG response: {0}", s);
                 return;
             }
 
-
+            //Example response for feedback of power.off from device: "a 1 OK00x"
+            // [0] = a
+            // [1] = 1
+            // [2] = 00x ('ok' relaced below)
             var data = s.Trim().Replace("OK", "").Split(' ');
 
             string command;
@@ -488,7 +588,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
             if (data.Length < 3)
             {
-                Debug.Console(2, this, "Unable to parse message, not enough data in message: {0}", s);
+                Debug.LogVerbose(this, "Unable to parse message, not enough data in message: {0}", s);
                 return;      
             }
             else
@@ -500,7 +600,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
             if (!id.Equals(Id))
             {
-                Debug.Console(2, this, "Device ID Mismatch - Discarding Response");
+                Debug.LogVerbose(this, "Device ID Mismatch - Discarding Response");
                 return;
             }
 
@@ -511,7 +611,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     UpdatePowerFb(responseValue);
                     break;
                 case "b":
-                    UpdateInputFb(responseValue);
+                    UpdateInputFb(responseValue.Replace("x", ""));
                     break;
                 case "f":
                     UpdateVolumeFb(responseValue);
@@ -546,6 +646,49 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             _lastCommandSentWasVolume = s[1] == 'f';
 
             Communication.SendText(s + "\x0D");
+        }
+
+        /// <summary>
+        /// Sets the requested input
+        /// </summary>
+        private int SetInput
+        {
+            set
+            {
+                if (value <= 0 || value > InputPorts.Count) return;
+
+                Debug.LogVerbose(this, "SetInput: value-'{0}'", value);
+
+                // -1 to get actual input in list after 0d check
+                var port = GetInputPort(value - 1);
+                if (port == null)
+                {
+                    Debug.LogVerbose(this, "SetInput: failed to get input port");
+                    return;
+                }
+
+                Debug.LogVerbose(this, "SetInput: port.key-'{0}', port.Selector-'{1}', port.ConnectionType-'{2}', port.FeebackMatchObject-'{3}'",
+                    port.Key, port.Selector, port.ConnectionType, port.FeedbackMatchObject);
+
+                ExecuteSwitch(port.Selector);
+            }
+        }
+
+        private RoutingInputPort GetInputPort(int input)
+        {
+            return InputPorts.ElementAt(input);
+        }
+
+        /// <summary>
+        /// Lists available input routing ports
+        /// </summary>
+        public void ListRoutingInputPorts()
+        {
+            foreach (var inputPort in InputPorts)
+            {
+                Debug.LogInformation(this, "ListRoutingInputPorts: key-'{0}', connectionType-'{1}', feedbackMatchObject-'{2}'",
+                    inputPort.Key, inputPort.ConnectionType, inputPort.FeedbackMatchObject);
+            }
         }
 
         /// <summary>
@@ -611,7 +754,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         public override void ExecuteSwitch(object selector)
         {
             //if (!(selector is Action))
-            //    Debug.Console(1, this, "WARNING: ExecuteSwitch cannot handle type {0}", selector.GetType());
+            //    Debug.LogDebug(this, "WARNING: ExecuteSwitch cannot handle type {0}", selector.GetType());
 
             if (PowerIsOn)
             {
@@ -695,9 +838,11 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// <param name="s">response from device</param>
         public void UpdateInputFb(string s)
         {
+            Debug.LogVerbose(this, "UpdateInputFb: {0}", s);
             var newInput = InputPorts.FirstOrDefault(i => i.FeedbackMatchObject.Equals(s.ToLower()));
             if (newInput != null && newInput != _currentInputPort)
             {
+                Debug.LogVerbose(this, "UpdateInputFb: NewInput.Key = {0}", newInput.Key);
                 _currentInputPort = newInput;
                 CurrentInputFeedback.FireUpdate();
                 var key = newInput.Key;
@@ -774,7 +919,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
             catch (Exception e)
             {
-                Debug.Console(2, this, "Error updating volumefb for value: {1}: {0}", e, s);
+                Debug.LogVerbose(this, "Error updating volumefb for value: {1}: {0}", e, s);
             }
         }
 
@@ -799,7 +944,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
             catch (Exception e)
             {
-                Debug.Console(2, this, "Unable to parse {0} to Int32 {1}", s, e);
+                Debug.LogVerbose(this, "Unable to parse {0} to Int32 {1}", s, e);
             }
         }
 
@@ -811,6 +956,12 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             try
             {
+                if (data < 0 || data >= _inputFeedback.Count)
+                {
+                    Debug.LogVerbose(this, "Input index {0} out of range for _inputFeedback (size {1})", data, _inputFeedback.Count);
+                    return;
+                }
+
                 if (_inputFeedback[data])
                 {
                     return;
@@ -830,7 +981,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
             catch (Exception e)
             {
-                Debug.Console(0, this, "{0}", e.Message);
+                Debug.LogInformation(this, "{0}", e.Message);
             }
         }
 
@@ -885,18 +1036,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 return;
             }
 
-            Debug.Console(2, this, "Invalid Mad Address sent to WolFunction - {0}", macAddress);
+            Debug.LogVerbose(this, "Invalid Mad Address sent to WolFunction - {0}", macAddress);
             throw new ArgumentException("Invalid MAC Address");
         }
-
-#if SERIES4
-        public void SetInput(string selector)
-        {
-            if (Inputs.Items.TryGetValue(selector, out var input))
-            {
-                input.Select();
-            }
-        }
-#endif
     }
 }
