@@ -629,7 +629,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 Debug.LogError(this, "Failed to normalize device ID '{0}': {1}", deviceId, e.Message);
                 return deviceId; // Return original if parsing fails
             }
-        }        
+        }
 
         private void AddRoutingInputPort(RoutingInputPort port, string fbMatch)
         {
@@ -664,10 +664,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             set
             {
-                Debug.LogVerbose(this, "=== SetInput Debug ===");
-                Debug.LogVerbose(this, "SetInput: Received value: {0}", value);
-                Debug.LogVerbose(this, "SetInput: InputPorts.Count: {0}", InputPorts.Count);
-
                 if (value <= 0 || value > InputPorts.Count)
                 {
                     Debug.LogError(this, "SetInput: Value {0} is out of range (1-{1})", value, InputPorts.Count);
