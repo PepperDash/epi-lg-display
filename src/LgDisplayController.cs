@@ -555,16 +555,18 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         private void ProcessResponse(string s)
         {
+            Debug.LogVerbose(this, "ProcessResponse: Raw response: '{0}'", s);
+
             if (s.ToLower().Contains("ng"))
             {
                 Debug.LogVerbose(this, "Ignoring NG response: {0}", s);
                 return;
             }
 
-            //Example response for feedback of power.off from device: "a 1 OK00x"
+            //Example response for feedback of power.off from device: "a 1 OK01x"
             // [0] = a
             // [1] = 1
-            // [2] = 00x ('ok' relaced below)
+            // [2] = 01x ('ok' relaced below)
             var data = s.Trim().Replace("OK", "").Split(' ');
 
             string command;
@@ -583,13 +585,16 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 responseValue = data[2];
             }
 
-            if (!id.Equals(Id))
+            // Normalize both IDs to integers for comparison (handles "1" vs "01")
+            if (!NormalizeId(id).Equals(NormalizeId(Id)))
             {
-                Debug.LogVerbose(this, "Device ID Mismatch - Discarding Response");
+                Debug.LogVerbose(this, "Device ID Mismatch - Expected: {0} (normalized: {1}), Received: {2} (normalized: {3}) - Discarding Response", 
+                    Id, NormalizeId(Id), id, NormalizeId(id));
                 return;
             }
 
-            //command = 'ka' 
+            Debug.LogVerbose(this, "Processing response - Command: '{0}', ID: '{1}', Value: '{2}'", command, id, responseValue);
+
             switch (command)
             {
                 case "a":
@@ -604,6 +609,25 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 case "e":
                     UpdateMuteFb(responseValue);
                     break;
+            }
+        }
+
+        /// <summary>
+        /// Normalizes device ID for comparison (converts to integer string to handle "01" vs "1")
+        /// </summary>
+        /// <param name="deviceId">Device ID to normalize</param>
+        /// <returns>Normalized device ID as integer string</returns>
+        private string NormalizeId(string deviceId)
+        {
+            try
+            {
+                // Convert to int and back to string to remove leading zeros
+                return int.Parse(deviceId).ToString();
+            }
+            catch (Exception e)
+            {
+                Debug.LogError(this, "Failed to normalize device ID '{0}': {1}", deviceId, e.Message);
+                return deviceId; // Return original if parsing fails
             }
         }
 
@@ -640,22 +664,35 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             set
             {
-                if (value <= 0 || value > InputPorts.Count) return;
-
-                Debug.LogVerbose(this, "SetInput: value-'{0}'", value);
-
-                // -1 to get actual input in list after 0d check
-                var port = GetInputPort(value - 1);
-                if (port == null)
+                if (value <= 0 || value > InputPorts.Count)
                 {
-                    Debug.LogVerbose(this, "SetInput: failed to get input port");
+                    Debug.LogError(this, "SetInput: Value {0} is out of range (1-{1})", value, InputPorts.Count);
                     return;
                 }
 
-                Debug.LogVerbose(this, "SetInput: port.key-'{0}', port.Selector-'{1}', port.ConnectionType-'{2}', port.FeebackMatchObject-'{3}'",
-                    port.Key, port.Selector, port.ConnectionType, port.FeedbackMatchObject);
+                var portIndex = value - 1;
+                Debug.LogVerbose(this, "SetInput: Looking for port at index: {0}", portIndex);
+                
+                var port = GetInputPort(portIndex);
+                if (port == null)
+                {
+                    Debug.LogError(this, "SetInput: Port at index {0} is null", portIndex);
+                    return;
+                }
 
-                ExecuteSwitch(port.Selector);
+                Debug.LogVerbose(this, "SetInput: Found port - Key: '{0}', Selector type: {1}", 
+                    port.Key, port.Selector?.GetType().Name ?? "NULL");
+                    
+                if (port.Selector is Action action)
+                {
+                    Debug.LogVerbose(this, "SetInput: Executing action for port '{0}'", port.Key);
+                    ExecuteSwitch(action);
+                }
+                else
+                {
+                    Debug.LogError(this, "SetInput: Port selector is not an Action! Type: {0}", 
+                        port.Selector?.GetType().Name ?? "NULL");
+                }
             }
         }
 
@@ -671,7 +708,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             foreach (var inputPort in InputPorts)
             {
-                Debug.LogInformation(this, "ListRoutingInputPorts: key-'{0}', connectionType-'{1}', feedbackMatchObject-'{2}'",
+                Debug.LogVerbose(this, "ListRoutingInputPorts: key-'{0}', connectionType-'{1}', feedbackMatchObject-'{2}'",
                     inputPort.Key, inputPort.ConnectionType, inputPort.FeedbackMatchObject);
             }
         }
@@ -697,6 +734,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputHdmi1()
         {
+            Debug.LogVerbose(this, "InputHdmi1() called - sending xb {0} 90", Id);
             SendData(string.Format("xb {0} 90", Id));
         }
 
@@ -705,6 +743,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputHdmi2()
         {
+            Debug.LogVerbose(this, "InputHdmi2() called - sending xb {0} 91", Id);
             SendData(string.Format("xb {0} 91", Id));
         }
 
@@ -713,6 +752,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputHdmi3()
         {
+            Debug.LogVerbose(this, "InputHdmi3() called - sending xb {0} 92", Id);
             SendData(string.Format("xb {0} 92", Id));
         }
 
@@ -721,6 +761,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputDisplayPort1()
         {
+            Debug.LogVerbose(this, "InputDisplayPort1() called - sending xb {0} C0", Id);
             SendData(string.Format("xb {0} C0", Id));
         }
 
@@ -741,16 +782,24 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             //if (!(selector is Action))
             //    Debug.LogDebug(this, "WARNING: ExecuteSwitch cannot handle type {0}", selector.GetType());
 
+            Debug.LogVerbose(this, "ExecuteSwitch called - PowerIsOn: {0}", PowerIsOn);
+
             if (PowerIsOn)
             {
                 var action = selector as Action;
                 if (action != null)
                 {
+                    Debug.LogVerbose(this, "ExecuteSwitch: Calling action()");
                     action();
+                }
+                else
+                {
+                    Debug.LogError(this, "ExecuteSwitch: selector is not an Action! Type: {0}", selector?.GetType().Name ?? "NULL");
                 }
             }
             else // if power is off, wait until we get on FB to send it. 
             {
+                Debug.LogVerbose(this, "ExecuteSwitch: Power is OFF, setting up power-on handler");
                 // One-time event handler to wait for power on before executing switch
                 EventHandler<FeedbackEventArgs> handler = null; // necessary to allow reference inside lambda to handler
                 handler = (o, a) =>
@@ -866,8 +915,10 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// <param name="s">response from device</param>
         public void UpdatePowerFb(string s)
         {
+            Debug.LogVerbose(this, "UpdatePowerFb: Received power feedback: '{0}'", s);
+            var wasOn = PowerIsOn;
             PowerIsOn = s.Contains("1");
-            
+            Debug.LogVerbose(this, "UpdatePowerFb: PowerIsOn changed from {0} to {1}", wasOn, PowerIsOn);
         }
 
         /// <summary>
@@ -964,7 +1015,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
             catch (Exception e)
             {
-                Debug.LogInformation(this, "{0}", e.Message);
+                Debug.LogError(this, "{0}", e.Message);
             }
         }
 
