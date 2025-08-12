@@ -18,7 +18,7 @@ using TwoWayDisplayBase = PepperDash.Essentials.Devices.Common.Displays.TwoWayDi
 namespace PepperDash.Essentials.Plugins.Lg.Display
 {
     public class LgDisplayController : TwoWayDisplayBase, IBasicVolumeWithFeedback, ICommunicationMonitor,
-        IInputHdmi1, IInputHdmi2, IInputHdmi3, IInputDisplayPort1, IBridgeAdvanced ,IHasInputs<string>
+        IInputHdmi1, IInputHdmi2, IInputHdmi3, IInputDisplayPort1, IBridgeAdvanced ,IHasInputs<string>, IBasicVideoMuteWithFeedback
     {
         GenericQueue ReceiveQueue;
         public const int InputPowerOn = 101;
@@ -36,6 +36,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         private bool _lastCommandSentWasVolume;
         private int _lastVolumeSent;        
         private bool _powerIsOn;
+        private bool _videoIsMuted;
         private ActionIncrementer _volumeIncrementer;
         private bool _volumeIsRamping;
         private ushort _volumeLevelForSig;
@@ -145,6 +146,15 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             {
                 _isMuted = value;
                 MuteFeedback.FireUpdate();
+            }
+        }
+        public bool VideoIsMuted
+        {
+            get { return _videoIsMuted; }
+            set
+            {
+                _videoIsMuted = value;
+                VideoMuteIsOn.FireUpdate();
             }
         }
 
@@ -286,6 +296,43 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             {
                 _volumeIsRamping = false;
                 _volumeIncrementer.Stop();
+            }
+        }
+
+        #endregion
+
+        #region IBasicVideoMuteWithFeedback Members
+
+        public BoolFeedback VideoMuteIsOn { get; private set; }
+
+        /// <summary>
+        /// Set Video Mute On
+        /// </summary>
+        public void VideoMuteOn()
+        {
+            SendData(string.Format("kd {0} {1}", Id, _smallDisplay ? "1" : "01"));
+        }
+
+        /// <summary>
+        /// Set Video Mute Off
+        /// </summary>
+        public void VideoMuteOff()
+        {
+            SendData(string.Format("kd {0} {1}", Id, _smallDisplay ? "0" : "00"));
+        }
+
+        /// <summary>
+        /// Toggle Current Video Mute State
+        /// </summary>
+        public void VideoMuteToggle()
+        {
+            if (VideoIsMuted)
+            {
+                VideoMuteOn();
+            }
+            else
+            {
+                VideoMuteOff();
             }
         }
 
@@ -609,6 +656,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 case "e":
                     UpdateMuteFb(responseValue);
                     break;
+                case "d":
+                    UpdateVideoMuteFb(responseValue);
+                    break;
             }
         }
 
@@ -919,6 +969,31 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             var wasOn = PowerIsOn;
             PowerIsOn = s.Contains("1");
             Debug.LogVerbose(this, "UpdatePowerFb: PowerIsOn changed from {0} to {1}", wasOn, PowerIsOn);
+        }
+
+        /// <summary>
+        /// Process Video Mute Feedback from Response
+        /// </summary>
+        /// <param name="s">response from device</param>
+        public void UpdateVideoMuteFb(string s)
+        {
+            try
+            {
+                var state = Convert.ToInt32(s);
+
+                if (state == 0)
+                {
+                    VideoIsMuted = false;
+                }
+                else if (state == 1)
+                {
+                    VideoIsMuted = true;
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogVerbose(this, "Unable to parse {0} to Int32 {1}", s, e);
+            }
         }
 
         /// <summary>
