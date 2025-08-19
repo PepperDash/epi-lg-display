@@ -13,12 +13,13 @@ using PepperDash.Essentials.Core.DeviceTypeInterfaces;
 using PepperDash.Essentials.Devices.Displays;
 using Epi.Display.Lg;
 using TwoWayDisplayBase = PepperDash.Essentials.Devices.Common.Displays.TwoWayDisplayBase;
+using PepperDash.Core.Logging;
 
 
 namespace PepperDash.Essentials.Plugins.Lg.Display
 {
     public class LgDisplayController : TwoWayDisplayBase, IBasicVolumeWithFeedback, ICommunicationMonitor,
-        IInputHdmi1, IInputHdmi2, IInputHdmi3, IInputDisplayPort1, IBridgeAdvanced ,IHasInputs<string>, IBasicVideoMuteWithFeedback
+        IInputHdmi1, IInputHdmi2, IInputHdmi3, IInputDisplayPort1, IBridgeAdvanced ,IHasInputs<string>, IBasicVideoMuteWithFeedback, IWarmingCooling
     {
         GenericQueue ReceiveQueue;
         public const int InputPowerOn = 101;
@@ -328,11 +329,11 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             if (VideoIsMuted)
             {
-                VideoMuteOn();
+                VideoMuteOff();
             }
             else
             {
-                VideoMuteOff();
+                VideoMuteOn();
             }
         }
 
@@ -504,6 +505,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
             MuteFeedback = new BoolFeedback(() => IsMuted);
             VolumeLevelFeedback = new IntFeedback(() => _volumeLevelForSig);
+            VideoMuteIsOn = new BoolFeedback(() => VideoIsMuted);
 
             AddRoutingInputPort(
                 new RoutingInputPort(RoutingPortNames.HdmiIn1, eRoutingSignalType.Audio | eRoutingSignalType.Video,
