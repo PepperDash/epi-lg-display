@@ -10,7 +10,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             TypeNames = new List<string> {"lgDisplay", "lgPlugin", "lg"};
 
-            MinimumEssentialsFrameworkVersion = "1.8.0";
+            MinimumEssentialsFrameworkVersion = "2.12.3";
         }
 
         #region Overrides of EssentialsDeviceFactory<LgDisplayController>
