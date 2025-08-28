@@ -337,6 +337,14 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
         }
 
+        /// <summary>
+        /// Poll Video Mute State
+        /// </summary>
+        public void VideoMuteGet()
+        {
+            SendData(string.Format("kd {0} FF", Id));
+        }
+
         #endregion
 
         #region IBridgeAdvanced Members
@@ -1111,6 +1119,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     VolumeGet();
                     CrestronEnvironment.Sleep(1500);
                     MuteGet();
+                    CrestronEnvironment.Sleep(1500);
+                    VideoMuteGet();
                 });
         }
 
