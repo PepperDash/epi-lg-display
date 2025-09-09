@@ -73,7 +73,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
      
             InputNumberFeedback = new IntFeedback(() =>
             {
-                Debug.LogVerbose(this, "InputNumberFeedback: CurrentInputNumber-'{0}'", InputNumber);
                 return InputNumber;
             });
 
@@ -390,10 +389,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
                 trilist.SetSigTrueAction((ushort)(joinMap.InputSelectOffset.JoinNumber + inputIndex), () =>
                 {
-                    Debug.LogVerbose(this, "InputSelect Digital-'{0}'", inputIndex + 1);
                     SetInput = inputIndex + 1;
                 });
-                Debug.LogVerbose(this, "Setting Input Select Action on Digital Join {0} to Input: {1}", joinMap.InputSelectOffset.JoinNumber + inputIndex, this.InputPorts[input.Key.ToString()].Key.ToString());
 
                 trilist.StringInput[(ushort)(joinMap.InputNamesOffset.JoinNumber + inputIndex)].StringValue = string.IsNullOrEmpty(input.Key) ? string.Empty : input.Key;
 
@@ -406,7 +403,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             // input (analog select)
             trilist.SetUShortSigAction(joinMap.InputSelect.JoinNumber, analogValue =>
             {
-                Debug.LogVerbose(this, "InputSelect Analog-'{0}'", analogValue);
                 SetInput = analogValue;
             });
 
@@ -604,8 +600,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         private void ProcessResponse(string s)
         {
-            Debug.LogVerbose(this, "ProcessResponse: Raw response: '{0}'", s);
-
             if (s.ToLower().Contains("ng"))
             {
                 Debug.LogVerbose(this, "Ignoring NG response: {0}", s);
@@ -641,8 +635,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     Id, NormalizeId(Id), id, NormalizeId(id));
                 return;
             }
-
-            Debug.LogVerbose(this, "Processing response - Command: '{0}', ID: '{1}', Value: '{2}'", command, id, responseValue);
 
             switch (command)
             {
@@ -723,7 +715,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 }
 
                 var portIndex = value - 1;
-                Debug.LogVerbose(this, "SetInput: Looking for port at index: {0}", portIndex);
                 
                 var port = GetInputPort(portIndex);
                 if (port == null)
@@ -731,13 +722,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     Debug.LogError(this, "SetInput: Port at index {0} is null", portIndex);
                     return;
                 }
-
-                Debug.LogVerbose(this, "SetInput: Found port - Key: '{0}', Selector type: {1}", 
-                    port.Key, port.Selector?.GetType().Name ?? "NULL");
                     
                 if (port.Selector is Action action)
                 {
-                    Debug.LogVerbose(this, "SetInput: Executing action for port '{0}'", port.Key);
                     ExecuteSwitch(action);
                 }
                 else
@@ -786,7 +773,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputHdmi1()
         {
-            Debug.LogVerbose(this, "InputHdmi1() called - sending xb {0} 90", Id);
             SendData(string.Format("xb {0} 90", Id));
         }
 
@@ -795,7 +781,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputHdmi2()
         {
-            Debug.LogVerbose(this, "InputHdmi2() called - sending xb {0} 91", Id);
             SendData(string.Format("xb {0} 91", Id));
         }
 
@@ -804,7 +789,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputHdmi3()
         {
-            Debug.LogVerbose(this, "InputHdmi3() called - sending xb {0} 92", Id);
             SendData(string.Format("xb {0} 92", Id));
         }
 
@@ -813,7 +797,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputDisplayPort1()
         {
-            Debug.LogVerbose(this, "InputDisplayPort1() called - sending xb {0} C0", Id);
             SendData(string.Format("xb {0} C0", Id));
         }
 
@@ -834,14 +817,11 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             //if (!(selector is Action))
             //    Debug.LogDebug(this, "WARNING: ExecuteSwitch cannot handle type {0}", selector.GetType());
 
-            Debug.LogVerbose(this, "ExecuteSwitch called - PowerIsOn: {0}", PowerIsOn);
-
             if (PowerIsOn)
             {
                 var action = selector as Action;
                 if (action != null)
                 {
-                    Debug.LogVerbose(this, "ExecuteSwitch: Calling action()");
                     action();
                 }
                 else
@@ -851,7 +831,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
             else // if power is off, wait until we get on FB to send it. 
             {
-                Debug.LogVerbose(this, "ExecuteSwitch: Power is OFF, setting up power-on handler");
                 // One-time event handler to wait for power on before executing switch
                 EventHandler<FeedbackEventArgs> handler = null; // necessary to allow reference inside lambda to handler
                 handler = (o, a) =>
@@ -924,11 +903,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// <param name="s">response from device</param>
         public void UpdateInputFb(string s)
         {
-            Debug.LogVerbose(this, "UpdateInputFb: {0}", s);
             var newInput = InputPorts.FirstOrDefault(i => i.FeedbackMatchObject.Equals(s.ToLower()));
             if (newInput != null && newInput != _currentInputPort)
             {
-                Debug.LogVerbose(this, "UpdateInputFb: NewInput.Key = {0}", newInput.Key);
                 _currentInputPort = newInput;
                 CurrentInputFeedback.FireUpdate();
                 var key = newInput.Key;
@@ -967,10 +944,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// <param name="s">response from device</param>
         public void UpdatePowerFb(string s)
         {
-            Debug.LogVerbose(this, "UpdatePowerFb: Received power feedback: '{0}'", s);
             var wasOn = PowerIsOn;
             PowerIsOn = s.Contains("1");
-            Debug.LogVerbose(this, "UpdatePowerFb: PowerIsOn changed from {0} to {1}", wasOn, PowerIsOn);
         }
 
         /// <summary>
@@ -1147,7 +1122,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 return;
             }
 
-            Debug.LogVerbose(this, "Invalid Mad Address sent to WolFunction - {0}", macAddress);
+            Debug.LogVerbose(this, "Invalid MAC Address sent to WolFunction - {0}", macAddress);
             throw new ArgumentException("Invalid MAC Address");
         }
     }
