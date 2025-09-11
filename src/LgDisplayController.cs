@@ -602,7 +602,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             if (s.ToLower().Contains("ng"))
             {
-                Debug.LogVerbose(this, "Ignoring NG response: {0}", s);
                 return;
             }
 
