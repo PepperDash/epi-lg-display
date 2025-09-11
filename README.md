@@ -77,3 +77,113 @@ This repo contains two Github Action workflows that will build this project auto
 Builds on the `Main` branch will ONLY be triggered by manually creating a release using the web interface in the repository. They will be versioned with the tag that is created when the release is created. The tags MUST take the form `major.minor.revision` to be compatible with the build process. A tag like `v0.1.0-alpha` is NOT compatabile and may result in the build process failing.
 
 If you have any questions about the action, contact Andrew Welker or Neil Dorin.
+<!-- START Minimum Essentials Framework Versions -->
+### Minimum Essentials Framework Versions
+
+- 1.8.0
+<!-- END Minimum Essentials Framework Versions -->
+<!-- START Config Example -->
+### Config Example
+
+```json
+{
+    "key": "GeneratedKey",
+    "uid": 1,
+    "name": "GeneratedName",
+    "type": "LgDisplayProperties",
+    "group": "Group",
+    "properties": {
+        "id": "SampleString",
+        "volumeUpperLimit": 0,
+        "volumeLowerLimit": 0,
+        "pollIntervalMs": 0,
+        "coolingTimeMs": "SampleValue",
+        "warmingTimeMs": "SampleValue",
+        "udpSocketKey": "SampleString",
+        "macAddress": "SampleString",
+        "smallDisplay": true,
+        "overrideWol": true,
+        "friendlyNames": [
+            {
+                "inputKey": "SampleString",
+                "name": "SampleString",
+                "hideInput": true
+            }
+        ]
+    }
+}
+```
+<!-- END Config Example -->
+<!-- START Supported Types -->
+
+<!-- END Supported Types -->
+<!-- START Join Maps -->
+
+<!-- END Join Maps -->
+<!-- START Interfaces Implemented -->
+### Interfaces Implemented
+
+- IBasicVolumeWithFeedback
+- ICommunicationMonitor
+- IInputHdmi1
+- IInputHdmi2
+- IInputHdmi3
+- IInputDisplayPort1
+- IBridgeAdvanced
+- IHasInputs<string>
+- IBasicVideoMuteWithFeedback
+- IWarmingCooling
+- ISelectableItems<string>
+<!-- END Interfaces Implemented -->
+<!-- START Base Classes -->
+### Base Classes
+
+- TwoWayDisplayBase
+- DisplayControllerJoinMap
+<!-- END Base Classes -->
+<!-- START Public Methods -->
+### Public Methods
+
+- public void SetVolume(ushort level)
+- public void MuteOn()
+- public void MuteOff()
+- public void MuteToggle()
+- public void VolumeDown(bool pressRelease)
+- public void VolumeUp(bool pressRelease)
+- public void VideoMuteOn()
+- public void VideoMuteOff()
+- public void VideoMuteToggle()
+- public void LinkToApi(BasicTriList trilist, uint joinStart, string joinMapKey, EiscApiAdvanced bridge)
+- public void SendData(string s)
+- public void ListRoutingInputPorts()
+- public void MuteGet()
+- public void VolumeGet()
+- public void InputHdmi1()
+- public void InputHdmi2()
+- public void InputHdmi3()
+- public void InputDisplayPort1()
+- public void InputGet()
+- public void PowerGet()
+- public void UpdateInputFb(string s)
+- public void UpdatePowerFb(string s)
+- public void UpdateVideoMuteFb(string s)
+- public void UpdateVolumeFb(string s)
+- public void UpdateMuteFb(string s)
+- public void StatusGet()
+- public void Select()
+<!-- END Public Methods -->
+<!-- START Bool Feedbacks -->
+### Bool Feedbacks
+
+- MuteFeedback
+- VideoMuteIsOn
+<!-- END Bool Feedbacks -->
+<!-- START Int Feedbacks -->
+### Int Feedbacks
+
+- InputNumberFeedback
+- VolumeLevelFeedback
+<!-- END Int Feedbacks -->
+<!-- START String Feedbacks -->
+
+<!-- END String Feedbacks -->
