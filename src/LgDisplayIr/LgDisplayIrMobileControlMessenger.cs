@@ -33,12 +33,10 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             // AddAction("/irCommand/antenna", (id, content) => PressAndHoldHandler.HandlePressAndHold(DeviceKey, content, device.InputAntenna));
             // AddAction("/irCommand/netflix", (id, content) => PressAndHoldHandler.HandlePressAndHold(DeviceKey, content, device.InputNetflix));
             // AddAction("/irCommand/primeVideo", (id, content) => PressAndHoldHandler.HandlePressAndHold(DeviceKey, content, device.InputPrimeVideo));
-            AddAction("/volumeUp", (id, content) => PressAndHoldHandler.HandlePressAndHold(DeviceKey, content, device.VolumeUp));
-            AddAction("/volumeDown", (id, content) => PressAndHoldHandler.HandlePressAndHold(DeviceKey, content, device.VolumeDown));
-            AddAction("/muteToggle", (id, content) => PressAndHoldHandler.HandlePressAndHold(DeviceKey, content, device.MuteToggle));
+            AddAction("/ircommand/volumeUp", (id, content) => PressAndHoldHandler.HandlePressAndHold(DeviceKey, content, device.VolumeUp));
+            AddAction("/ircommand/volumeDown", (id, content) => PressAndHoldHandler.HandlePressAndHold(DeviceKey, content, device.VolumeDown));
+            AddAction("/ircommand/muteToggle", (id, content) => PressAndHoldHandler.HandlePressAndHold(DeviceKey, content, device.MuteToggle));
         }
     }
-
-
 }
 
