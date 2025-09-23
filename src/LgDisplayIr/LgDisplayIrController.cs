@@ -8,7 +8,6 @@ using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges;
 using PepperDash.Essentials.Core.Devices;
 using PepperDash.Essentials.Core.DeviceTypeInterfaces;
-using PepperDash.Essentials.Devices.Displays;
 using DisplayBase = PepperDash.Essentials.Devices.Common.Displays.DisplayBase;
 
 
