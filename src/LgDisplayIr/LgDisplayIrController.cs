@@ -6,6 +6,7 @@ using Epi.Display.Lg;
 using PepperDash.Core;
 using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges;
+using PepperDash.Essentials.Core.Devices;
 using PepperDash.Essentials.Core.DeviceTypeInterfaces;
 using PepperDash.Essentials.Devices.Displays;
 using DisplayBase = PepperDash.Essentials.Devices.Common.Displays.DisplayBase;
@@ -15,7 +16,11 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 {
     public class LgDisplayIrController : DisplayBase, IBasicVolumeControls, IInputHdmi1, IInputHdmi2, IInputHdmi3, IInputDisplayPort1, IBridgeAdvanced, IHasInputs<string>
     {
-        private readonly LgDisplayPropertiesConfig config;
+        private readonly LgDisplayPropertiesConfig propertiesConfig;
+
+        private GenericIrController irController;
+        private string irCommand;
+        public StringFeedback IrCommandFeedback { get; private set; }
 
         public const int InputPowerOn = 101;
         public const int InputPowerOff = 102;
@@ -47,20 +52,36 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         }
 
 
-        public LgDisplayIrController(string key, string name, LgDisplayPropertiesConfig config, IBasicCommunication comms)
+        public LgDisplayIrController(string key, string name, LgDisplayPropertiesConfig propertiesConfig)
             : base(key, name)
         {
-            this.config = config;
-            var props = config;
-            if (props == null)
+            this.propertiesConfig = propertiesConfig;
+            if (propertiesConfig == null)
             {
                 Debug.LogError(this, "Display configuration must be included");
 
                 return;
             }
 
-            CooldownTime = props.coolingTimeMs > 0 ? props.coolingTimeMs : 10000;
-            WarmupTime = props.warmingTimeMs > 0 ? props.warmingTimeMs : 8000;
+            AddPreActivationAction(() =>
+            {
+                irController = DeviceManager.GetDeviceForKey(Key) as GenericIrController;
+                if (irController == null)
+                {
+                    Debug.LogError(this, "IR controller '{0}' not found", Key);
+                    return;
+                }
+                else
+                {
+                    Debug.LogInformation(this, "Using IR controller '{0}'", Key);
+                }
+
+                IrCommandFeedback = new StringFeedback(() => irCommand ?? string.Empty);
+
+            });
+
+            CooldownTime = propertiesConfig.coolingTimeMs > 0 ? propertiesConfig.coolingTimeMs : 10000;
+            WarmupTime = propertiesConfig.warmingTimeMs > 0 ? propertiesConfig.warmingTimeMs : 8000;
         }
 
         /// <summary>
@@ -68,19 +89,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public override void Initialize()
         {
-            AddRoutingInputPort(
-                new RoutingInputPort(RoutingPortNames.HdmiIn1, eRoutingSignalType.Audio | eRoutingSignalType.Video,
-                    eRoutingPortConnectionType.Hdmi, new Action(InputHdmi1), this), "90");
-            AddRoutingInputPort(
-                new RoutingInputPort(RoutingPortNames.HdmiIn2, eRoutingSignalType.Audio | eRoutingSignalType.Video,
-                    eRoutingPortConnectionType.Hdmi, new Action(InputHdmi2), this), "91");
-            AddRoutingInputPort(
-                new RoutingInputPort(RoutingPortNames.HdmiIn3, eRoutingSignalType.Audio | eRoutingSignalType.Video,
-                    eRoutingPortConnectionType.Hdmi, new Action(InputHdmi3), this), "92");
-            AddRoutingInputPort(
-                new RoutingInputPort(RoutingPortNames.DisplayPortIn, eRoutingSignalType.Audio | eRoutingSignalType.Video,
-                    eRoutingPortConnectionType.DisplayPort, new Action(InputDisplayPort1), this), "c0");
-
             SetupInputs();
 
             base.Initialize();
@@ -93,6 +101,19 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         public override bool CustomActivate()
         {
             return base.CustomActivate();
+        }
+
+        protected override void CreateMobileControlMessengers()
+        {
+            var mc = DeviceManager.AllDevices.OfType<IMobileControl>().FirstOrDefault();
+            if (mc == null)
+            {
+                Debug.LogInformation("Mobile Control not found");
+                return;
+            }
+
+            var messenger = new LgDisplayIrMobileControlMessenger($"{Key}-irCommands", $"/device/{Key}", this);
+            mc.AddDeviceMessenger(messenger);
         }
 
 
@@ -135,7 +156,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
                 trilist.SetSigTrueAction((ushort)(joinMap.InputSelectOffset.JoinNumber + inputIndex), () =>
                 {
-                    SetInput = inputIndex + 1;
+                    ExecuteSwitch(GetInputPort(inputIndex + 1).Selector);
+                    //SetInput = inputIndex + 1;
                 });
 
                 trilist.StringInput[(ushort)(joinMap.InputNamesOffset.JoinNumber + inputIndex)].StringValue = string.IsNullOrEmpty(input.Key) ? string.Empty : input.Key;
@@ -145,7 +167,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             // input (analog select)
             trilist.SetUShortSigAction(joinMap.InputSelect.JoinNumber, analogValue =>
             {
-                SetInput = analogValue;
+                ExecuteSwitch(GetInputPort(analogValue).Selector);
+                //SetInput = analogValue;
             });
 
 
@@ -162,6 +185,26 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         #endregion
 
 
+        private void SendIrCommand(string cmd)
+        {
+            if (string.IsNullOrEmpty(cmd))
+            {
+                Debug.LogError(this, "SendIrCommand: command is null or empty");
+                return;
+            }
+
+            var irCmd = IrStandardCommands.GetCommandValue(cmd);
+            if (string.IsNullOrEmpty(irCmd))
+            {
+                Debug.LogError(this, "SendIrCommand: ir command '{0}' not found", cmd);
+                return;
+            }
+
+            irController?.Press(irCmd, true);
+            irController?.Press(irCmd, false);
+            Debug.LogInformation(this, "SendIrCommand: selector '{0}'", cmd);
+        }
+
 
 
         #region  Power Members
@@ -171,16 +214,40 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public override void PowerOn()
         {
-            // TODO - Implement IR control
+            irController?.Press(IrStandardCommands.PowerOn, true);
+            irController?.Press(IrStandardCommands.PowerOn, false);
         }
+
+        /// <summary>
+        /// Set Power On for Device on press
+        /// </summary>
+        /// <param name="pressRelease"></param>
+        public void PowerOnPress(bool pressRelease)
+        {
+            if (pressRelease) return;
+            PowerOn();
+        }
+
 
         /// <summary>
         /// Set Power Off for Device
         /// </summary>
         public override void PowerOff()
         {
-            // TODO - Implement IR control
+            irController?.Press(IrStandardCommands.PowerOff, true);
+            irController?.Press(IrStandardCommands.PowerOff, false);
         }
+
+        /// <summary>
+        /// Set Power Off for Device on press
+        /// </summary>
+        /// <param name="pressRelease"></param>
+        public void PowerOffPress(bool pressRelease)
+        {
+            if (pressRelease) return;
+            PowerOff();
+        }
+
 
 
         /// <summary>
@@ -188,7 +255,19 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public override void PowerToggle()
         {
-            // TODO - Implement IR control
+            irController?.Press(IrStandardCommands.PowerToggle, true);
+            irController?.Press(IrStandardCommands.PowerToggle, false);
+        }
+
+
+        /// <summary>
+        /// Toggle current power state for device on press
+        /// </summary>
+        /// <param name="pressRelease"></param>
+        public void PowerTogglePress(bool pressRelease)
+        {
+            if (pressRelease) return;
+            PowerToggle();
         }
 
         protected override Func<bool> IsCoolingDownFeedbackFunc
@@ -204,66 +283,91 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         #endregion
 
 
+
         #region Input Members
 
-        /// <summary>
-        /// Sets the requested input
-        /// </summary>
-        private int SetInput
+        private void AddRoutingInputPort(RoutingInputPort port, string fbMatch)
         {
-            set
+            port.FeedbackMatchObject = fbMatch;
+            InputPorts.Add(port);
+        }
+
+        private RoutingInputPort GetInputPort(int input)
+        {
+            return InputPorts.ElementAt(input);
+        }
+
+        /// <summary>
+        /// Lists available input routing ports
+        /// </summary>
+        public void ListRoutingInputPorts()
+        {
+            foreach (var inputPort in InputPorts)
             {
-                if (value <= 0 || value > InputPorts.Count)
-                {
-                    Debug.LogError(this, "SetInput: Value {0} is out of range (1-{1})", value, InputPorts.Count);
-                    return;
-                }
-
-                var portIndex = value - 1;
-
-
-                var port = GetInputPort(portIndex);
-                if (port == null)
-                {
-                    Debug.LogError(this, "SetInput: Port at index {0} is null", portIndex);
-                    return;
-                }
-
-
-                if (port.Selector is Action action)
-                {
-                    ExecuteSwitch(action);
-                }
-                else
-                {
-                    Debug.LogError(this, "SetInput: Port selector is not an Action! Type: {0}",
-
-                        port.Selector?.GetType().Name ?? "NULL");
-                }
+                Debug.LogVerbose(this, "ListRoutingInputPorts: key-'{0}', connectionType-'{1}', feedbackMatchObject-'{2}'",
+                    inputPort.Key, inputPort.ConnectionType, inputPort.FeedbackMatchObject);
             }
         }
 
+
         private void SetupInputs()
         {
+            AddRoutingInputPort(
+                new RoutingInputPort(RoutingPortNames.HdmiIn1, eRoutingSignalType.Audio | eRoutingSignalType.Video,
+                    eRoutingPortConnectionType.Hdmi, new Action(InputHdmi1), this), IrStandardCommands.InputHdmi1);
+            AddRoutingInputPort(
+                new RoutingInputPort(RoutingPortNames.HdmiIn2, eRoutingSignalType.Audio | eRoutingSignalType.Video,
+                    eRoutingPortConnectionType.Hdmi, new Action(InputHdmi2), this), IrStandardCommands.InputHdmi2);
+            AddRoutingInputPort(
+                new RoutingInputPort(RoutingPortNames.HdmiIn3, eRoutingSignalType.Audio | eRoutingSignalType.Video,
+                    eRoutingPortConnectionType.Hdmi, new Action(InputHdmi3), this), IrStandardCommands.InputHdmi3);
+            AddRoutingInputPort(
+                new RoutingInputPort(RoutingPortNames.HdmiIn4, eRoutingSignalType.Audio | eRoutingSignalType.Video,
+                    eRoutingPortConnectionType.Hdmi, new Action(InputHdmi4), this), IrStandardCommands.InputHdmi4);
+            AddRoutingInputPort(
+                new RoutingInputPort(RoutingPortNames.AnyVideoIn, eRoutingSignalType.Audio | eRoutingSignalType.Video,
+                    eRoutingPortConnectionType.Composite, new Action(InputTv), this), IrStandardCommands.InputTv);
+            AddRoutingInputPort(
+                new RoutingInputPort(RoutingPortNames.AntennaIn, eRoutingSignalType.Audio | eRoutingSignalType.Video,
+                    eRoutingPortConnectionType.None, new Action(InputAntenna), this), IrStandardCommands.InputAntenna);
+            AddRoutingInputPort(
+                new RoutingInputPort(RoutingPortNames.AnyVideoIn, eRoutingSignalType.Audio | eRoutingSignalType.Video,
+                    eRoutingPortConnectionType.Streaming, new Action(InputNetflix), this), IrStandardCommands.Netflix);
+            AddRoutingInputPort(
+                new RoutingInputPort(RoutingPortNames.AnyVideoIn, eRoutingSignalType.Audio | eRoutingSignalType.Video,
+                    eRoutingPortConnectionType.Streaming, new Action(InputPrimeVideo), this), IrStandardCommands.PrimeVideo);
+
             Inputs = new LgDisplayIrInputs
             {
                 Items = new Dictionary<string, ISelectableItem>
                 {
                     {
-                        "90", new LgDisplayIrInput("90", "HDMI 1", this)
+                        IrStandardCommands.InputHdmi1, new LgDisplayIrInput(IrStandardCommands.InputHdmi1, "HDMI 1", this)
                     },
                     {
-                        "91", new LgDisplayIrInput("91", "HDMI 2", this)
+                        IrStandardCommands.InputHdmi2, new LgDisplayIrInput(IrStandardCommands.InputHdmi2, "HDMI 2", this)
                     },
                     {
-                        "92", new LgDisplayIrInput("92", "HDMI 3", this)
+                        IrStandardCommands.InputHdmi3, new LgDisplayIrInput(IrStandardCommands.InputHdmi3, "HDMI 3", this)
                     },
                     {
-                        "c0", new LgDisplayIrInput("c0", "DisplayPort", this)
+                        IrStandardCommands.InputHdmi4, new LgDisplayIrInput(IrStandardCommands.InputHdmi4, "HDMI 4", this)
                     },
+                    {
+                        IrStandardCommands.InputTv, new LgDisplayIrInput(IrStandardCommands.InputTv, "TV", this)
+                    },
+                    {
+                        IrStandardCommands.InputAntenna, new LgDisplayIrInput(IrStandardCommands.InputAntenna, "Antenna", this)
+                    },
+                    {
+                        IrStandardCommands.Netflix, new LgDisplayIrInput(IrStandardCommands.Netflix, "Netflix", this)
+                    },
+                    {
+                        IrStandardCommands.PrimeVideo, new LgDisplayIrInput(IrStandardCommands.PrimeVideo, "Prime Video", this)
+                    }
                 }
             };
-            ApplyFriendlyNames(config);
+            ApplyFriendlyNames(propertiesConfig);
 
         }
         private void ApplyFriendlyNames(LgDisplayPropertiesConfig config)
@@ -290,35 +394,23 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
         }
 
-        private void AddRoutingInputPort(RoutingInputPort port, string fbMatch)
-        {
-            port.FeedbackMatchObject = fbMatch;
-            InputPorts.Add(port);
-        }
-
-        private RoutingInputPort GetInputPort(int input)
-        {
-            return InputPorts.ElementAt(input);
-        }
-
-        /// <summary>
-        /// Lists available input routing ports
-        /// </summary>
-        public void ListRoutingInputPorts()
-        {
-            foreach (var inputPort in InputPorts)
-            {
-                Debug.LogVerbose(this, "ListRoutingInputPorts: key-'{0}', connectionType-'{1}', feedbackMatchObject-'{2}'",
-                    inputPort.Key, inputPort.ConnectionType, inputPort.FeedbackMatchObject);
-            }
-        }
-
         /// <summary>
         /// Select Hdmi 1 Input
         /// </summary>
         public void InputHdmi1()
         {
-            // TODO - Implement IR control
+            irController?.Press(IrStandardCommands.InputHdmi1, true);
+            irController?.Press(IrStandardCommands.InputHdmi1, false);
+        }
+
+        /// <summary>
+        /// Select Hdmi 1 Input on press
+        /// </summary>
+        /// <param name="pressRelease"></param>
+        public void InputHdmi1(bool pressRelease)
+        {
+            if (pressRelease) return;
+            InputHdmi1();
         }
 
         /// <summary>
@@ -326,7 +418,18 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputHdmi2()
         {
-            // TODO - Implement IR control
+            irController?.Press(IrStandardCommands.InputHdmi2, true);
+            irController?.Press(IrStandardCommands.InputHdmi2, false);
+        }
+
+        /// <summary>
+        /// Select Hdmi 2 Input on press
+        /// </summary>
+        /// <param name="pressRelease"></param>
+        public void InputHdmi2(bool pressRelease)
+        {
+            if (pressRelease) return;
+            InputHdmi2();
         }
 
         /// <summary>
@@ -334,15 +437,144 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputHdmi3()
         {
-            // TODO - Implement IR control
+            irController?.Press(IrStandardCommands.InputHdmi3, true);
+            irController?.Press(IrStandardCommands.InputHdmi3, false);
         }
+
+        /// <summary>
+        /// Select Hdmi 3 Input on press
+        /// </summary>
+        /// <param name="pressRelease"></param>
+        public void InputHdmi3(bool pressRelease)
+        {
+            if (pressRelease) return;
+            InputHdmi3();
+        }
+
 
         /// <summary>
         /// Select DisplayPort Input
         /// </summary>
         public void InputDisplayPort1()
         {
-            // TODO - Implement IR control
+            throw new NotImplementedException();
+        }
+
+        /// <summary>
+        /// Select DisplayPort Input on press
+        /// </summary>
+        /// <param name="pressRelease"></param>
+        public void InputDisplayPort1(bool pressRelease)
+        {
+            if (pressRelease) return;
+            InputDisplayPort1();
+        }
+
+        /// <summary>
+        /// Select Hdmi 4 Input
+        /// </summary>
+        public void InputHdmi4()
+        {
+            irController?.Press(IrStandardCommands.InputHdmi4, true);
+            irController?.Press(IrStandardCommands.InputHdmi4, false);
+        }
+
+        /// <summary>
+        /// Select Hdmi 4 Input on press
+        /// </summary>
+        /// <param name="pressRelease"></param>
+        public void InputHdmi4(bool pressRelease)
+        {
+            if (pressRelease) return;
+            InputHdmi4();
+        }
+
+        /// <summary>
+        /// Select Tv
+        /// </summary>
+        public void InputTv()
+        {
+            irController?.Press(IrStandardCommands.InputTv, true);
+            irController?.Press(IrStandardCommands.InputTv, false);
+        }
+
+        /// <summary>
+        /// Select Tv on press
+        /// </summary>
+        /// <param name="pressRelease"></param>
+        public void InputTv(bool pressRelease)
+        {
+            if (pressRelease) return;
+            InputTv();
+        }
+
+        /// <summary>
+        /// Select Antenna
+        /// </summary>
+        public void InputAntenna()
+        {
+            irController?.Press(IrStandardCommands.InputAntenna, true);
+            irController?.Press(IrStandardCommands.InputAntenna, false);
+        }
+
+        /// <summary>
+        /// Select Antenna on press
+        /// </summary>
+        /// <param name="pressRelease"></param>
+        public void InputAntenna(bool pressRelease)
+        {
+            if (pressRelease) return;
+            InputAntenna();
+        }
+
+        /// <summary>
+        /// Select Netflix
+        /// </summary>
+        public void InputNetflix()
+        {
+            irController?.Press(IrStandardCommands.Netflix, true);
+            irController?.Press(IrStandardCommands.Netflix, false);
+        }
+
+        /// <summary>
+        /// Select Netflix on press
+        /// </summary>
+        /// <param name="pressRelease"></param>
+        public void InputNetflix(bool pressRelease)
+        {
+            if (pressRelease) return;
+            InputNetflix();
+        }
+
+        /// <summary>
+        /// Select Amazon Prime Video
+        /// </summary>
+        public void InputPrimeVideo()
+        {
+            irController?.Press(IrStandardCommands.PrimeVideo, true);
+            irController?.Press(IrStandardCommands.PrimeVideo, false);
+        }
+
+        /// <summary>
+        /// Select Amazon Prime Video on press
+        /// </summary>
+        /// <param name="pressRelease"></param>
+        public void InputPrimeVideo(bool pressRelease)
+        {
+            if (pressRelease) return;
+            InputPrimeVideo();
+        }
+
+        public void InputToggle()
+        {
+            irController?.Press(IrStandardCommands.InputToggle, true);
+            irController?.Press(IrStandardCommands.InputToggle, false);
+        }
+
+        public void InputToggle(bool pressRelease)
+        {
+            if (pressRelease) return;
+            InputToggle();
         }
 
         /// <summary>
@@ -351,40 +583,47 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// <param name="selector"></param>
         public override void ExecuteSwitch(object selector)
         {
-            // if (PowerIsOn)
-            // {
-            //     var action = selector as Action;
-            //     if (action != null)
-            //     {
-            //         action();
-            //     }
-            //     else
-            //     {
-            //         Debug.LogError(this, "ExecuteSwitch: selector is not an Action! Type: {0}", selector?.GetType().Name ?? "NULL");
-            //     }
-            // }
-            // else // if power is off, wait until we get on FB to send it. 
-            // {
-            //     // One-time event handler to wait for power on before executing switch
-            //     EventHandler<FeedbackEventArgs> handler = null; // necessary to allow reference inside lambda to handler
-            //     handler = (o, a) =>
-            //     {
-            //         if (isWarmingUp)
-            //         {
-            //             return;
-            //         }
+            Debug.LogInformation(this, $"ExecuteSwitch: selector '{selector}' type '{selector?.GetType().Name ?? "null"}'");
 
-            //         IsWarmingUpFeedback.OutputChange -= handler;
+            string cmd = null;
 
-            //         var action = selector as Action;
-            //         if (action != null)
-            //         {
-            //             action();
-            //         }
-            //     };
-            //     IsWarmingUpFeedback.OutputChange += handler; // attach and wait for on FB
-            //     PowerOn();
-            // }
+            if (selector is RoutingInputPort port)
+            {
+                cmd = port.FeedbackMatchObject as string;
+                if (string.IsNullOrEmpty(cmd))
+                {
+                    Debug.LogError(this, "ExecuteSwitch: command not found for input port '{0}'", port.Key);
+                    return;
+                }
+            }
+            else if (selector is string strCmd)
+            {
+                cmd = strCmd;
+                if (string.IsNullOrEmpty(cmd))
+                {
+                    Debug.LogError(this, "ExecuteSwitch: selector is null or empty");
+                    return;
+                }
+            }
+            else if (selector is int intCmd)
+            {
+                cmd = intCmd.ToString();
+            }
+            else if (selector is ushort ushortCmd)
+            {
+                cmd = ushortCmd.ToString();
+            }
+            else
+            {
+                cmd = selector?.ToString();
+                if (string.IsNullOrEmpty(cmd))
+                {
+                    Debug.LogError(this, "ExecuteSwitch: selector is null or empty");
+                    return;
+                }
+            }
+
+            SendIrCommand(cmd);
         }
 
         #endregion
@@ -394,17 +633,28 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         public void VolumeUp(bool pressRelease)
         {
-            throw new NotImplementedException();
+            if (pressRelease) return;
+            irController?.Press(IrStandardCommands.VolumeUp, true);
+            irController?.Press(IrStandardCommands.VolumeUp, false);
         }
 
         public void VolumeDown(bool pressRelease)
         {
-            throw new NotImplementedException();
+            if (pressRelease) return;
+            irController?.Press(IrStandardCommands.VolumeDown, true);
+            irController?.Press(IrStandardCommands.VolumeDown, false);
         }
 
         public void MuteToggle()
         {
-            throw new NotImplementedException();
+            irController?.Press(IrStandardCommands.MuteToggle, true);
+            irController?.Press(IrStandardCommands.MuteToggle, false);
+        }
+
+        public void MuteToggle(bool pressRelease)
+        {
+            if (pressRelease) return;
+            MuteToggle();
         }
 
         #endregion
