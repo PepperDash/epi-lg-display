@@ -112,7 +112,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 return;
             }
 
-            var messenger = new LgDisplayIrMobileControlMessenger($"{Key}-irCommands", $"/device/{Key}", this);
+            var messenger = new LgDisplayIrMobileControlMessenger($"{Key}", $"/device/{Key}", this);
             mc.AddDeviceMessenger(messenger);
         }
 
