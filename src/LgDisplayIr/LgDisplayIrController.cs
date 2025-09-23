@@ -14,7 +14,7 @@ using DisplayBase = PepperDash.Essentials.Devices.Common.Displays.DisplayBase;
 
 namespace PepperDash.Essentials.Plugins.Lg.Display
 {
-    public class LgDisplayIrController : DisplayBase, IBasicVolumeControls, IInputHdmi1, IInputHdmi2, IInputHdmi3, IInputDisplayPort1, IBridgeAdvanced, IHasInputs<string>
+    public class LgDisplayIrController : DisplayBase, IBasicVolumeControls, IBridgeAdvanced, IHasInputs<string>
     {
         private readonly LgDisplayPropertiesConfig propertiesConfig;
 
@@ -342,28 +342,28 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 Items = new Dictionary<string, ISelectableItem>
                 {
                     {
-                        IrStandardCommands.InputHdmi1, new LgDisplayIrInput(IrStandardCommands.InputHdmi1, "HDMI 1", this)
+                        "hdmi1", new LgDisplayIrInput("hdmi1", "HDMI 1", this)
                     },
                     {
-                        IrStandardCommands.InputHdmi2, new LgDisplayIrInput(IrStandardCommands.InputHdmi2, "HDMI 2", this)
+                        "hdmi2", new LgDisplayIrInput("hdmi2", "HDMI 2", this)
                     },
                     {
-                        IrStandardCommands.InputHdmi3, new LgDisplayIrInput(IrStandardCommands.InputHdmi3, "HDMI 3", this)
+                        "hdmi3", new LgDisplayIrInput("hdmi3", "HDMI 3", this)
                     },
                     {
-                        IrStandardCommands.InputHdmi4, new LgDisplayIrInput(IrStandardCommands.InputHdmi4, "HDMI 4", this)
+                        "hdmi4", new LgDisplayIrInput("hdmi4", "HDMI 4", this)
                     },
                     {
-                        IrStandardCommands.InputTv, new LgDisplayIrInput(IrStandardCommands.InputTv, "TV", this)
+                        "tv", new LgDisplayIrInput("tv", "TV", this)
                     },
                     {
-                        IrStandardCommands.InputAntenna, new LgDisplayIrInput(IrStandardCommands.InputAntenna, "Antenna", this)
+                        "antenna", new LgDisplayIrInput("antenna", "Antenna", this)
                     },
                     {
-                        IrStandardCommands.Netflix, new LgDisplayIrInput(IrStandardCommands.Netflix, "Netflix", this)
+                        "netflix", new LgDisplayIrInput("netflix", "Netflix", this)
                     },
                     {
-                        IrStandardCommands.PrimeVideo, new LgDisplayIrInput(IrStandardCommands.PrimeVideo, "Prime Video", this)
+                        "primeVideo", new LgDisplayIrInput("primeVideo", "Prime Video", this)
                     }
                 }
             };
@@ -449,25 +449,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             if (pressRelease) return;
             InputHdmi3();
-        }
-
-
-        /// <summary>
-        /// Select DisplayPort Input
-        /// </summary>
-        public void InputDisplayPort1()
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <summary>
-        /// Select DisplayPort Input on press
-        /// </summary>
-        /// <param name="pressRelease"></param>
-        public void InputDisplayPort1(bool pressRelease)
-        {
-            if (pressRelease) return;
-            InputDisplayPort1();
         }
 
         /// <summary>
