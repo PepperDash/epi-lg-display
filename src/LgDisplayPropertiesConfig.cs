@@ -36,9 +36,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         [JsonProperty("overrideWol")]
         public bool OverrideWol { get; set; }
 
-        [JsonProperty("irDeviceKey")]
-        public string irDeviceKey { get; set; }
-
         [JsonProperty("friendlyNames")]
         public List<FriendlyName> FriendlyNames { get; set; }
 
