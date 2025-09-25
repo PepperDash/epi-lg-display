@@ -1,13 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using Crestron.SimplSharpPro;
 using Crestron.SimplSharpPro.DeviceSupport;
 using Epi.Display.Lg;
 using PepperDash.Core;
 using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges;
-using PepperDash.Essentials.Core.Devices;
 using PepperDash.Essentials.Core.DeviceTypeInterfaces;
 using DisplayBase = PepperDash.Essentials.Devices.Common.Displays.DisplayBase;
 
@@ -18,7 +16,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
     {
         private readonly LgDisplayPropertiesConfig propertiesConfig;
 
-        private GenericIrController irController;
+        private IrOutputPortController irController;
 
         public const int InputPowerOn = 101;
         public const int InputPowerOff = 102;
@@ -49,7 +47,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         }
 
 
-        public LgDisplayIrController(string key, string name, LgDisplayPropertiesConfig config)
+        public LgDisplayIrController(string key, string name, LgDisplayPropertiesConfig config, IrOutputPortController irController)
             : base(key, name)
         {
             this.propertiesConfig = config;
@@ -59,15 +57,14 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 return;
             }
 
-            AddPostActivationAction(() =>
+            this.irController = irController;
+            if (this.irController == null)
             {
-                irController = DeviceManager.GetDeviceForKey(propertiesConfig.irDeviceKey) as GenericIrController;
-                if (irController == null)
-                {
-                    Debug.LogError(this, $"GenericIrController '{propertiesConfig.irDeviceKey}' could not be found");
-                    return;
-                }
-            });
+                Debug.LogError(this, "IrOutputPortController instance must be included");
+                return;
+            }
+
+            DeviceManager.AddDevice(irController);
 
             CooldownTime = propertiesConfig.coolingTimeMs > 0 ? propertiesConfig.coolingTimeMs : 10000;
             WarmupTime = propertiesConfig.warmingTimeMs > 0 ? propertiesConfig.warmingTimeMs : 8000;
@@ -182,17 +179,10 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 return;
             }
 
-            // var irCmd = IrStandardCommands.GetCommandValue(cmd);
-            // if (string.IsNullOrEmpty(irCmd))
-            // {
-            //     Debug.LogError(this, "SendIrCommand: ir command '{0}' not found", cmd);
-            //     return;
-            // }
-
             Debug.LogInformation(this, "SendIrCommand: ir command '{0}'", cmd);
 
-            irController?.Press(cmd, true);
-            irController?.Press(cmd, false);
+            irController?.PressRelease(cmd, true);
+            irController?.PressRelease(cmd, false);
         }
 
 
@@ -238,8 +228,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             PowerOff();
         }
 
-
-
         /// <summary>
         /// Toggle current power state for device
         /// </summary>
@@ -248,7 +236,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             Debug.LogInformation(this, "PowerToggle: ir command '{0}'", IrStandardCommands.PowerToggle);
             SendIrCommand(IrStandardCommands.PowerToggle);
         }
-
 
         /// <summary>
         /// Toggle current power state for device on press
