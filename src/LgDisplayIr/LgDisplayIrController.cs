@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Crestron.SimplSharpPro.DeviceSupport;
+using Crestron.SimplSharpPro.DM.Cards;
 using Epi.Display.Lg;
 using PepperDash.Core;
 using PepperDash.Essentials.Core;
@@ -49,7 +50,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         }
 
 
-        public LgDisplayIrController(string key, string name, LgDisplayPropertiesConfig propertiesConfig)
+        public LgDisplayIrController(string key, string name, LgDisplayPropertiesConfig propertiesConfig, IrOutputPortController irOutputPortController)
             : base(key, name)
         {
             this.propertiesConfig = propertiesConfig;
@@ -60,19 +61,12 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 return;
             }
 
-            AddPreActivationAction(() =>
+            irController = new GenericIrController(key, name, irOutputPortController);
+            if (irController == null)
             {
-                irController = DeviceManager.GetDeviceForKey(Key) as GenericIrController;
-                if (irController == null)
-                {
-                    Debug.LogError(this, "IR controller '{0}' not found", Key);
-                    return;
-                }
-                else
-                {
-                    Debug.LogInformation(this, "IR controller '{0}' successfully built", Key);
-                }
-            });
+                Debug.LogError(this, $"GenericIrController could not be built for device '{key}'");
+                return;
+            }
 
             CooldownTime = propertiesConfig.coolingTimeMs > 0 ? propertiesConfig.coolingTimeMs : 10000;
             WarmupTime = propertiesConfig.warmingTimeMs > 0 ? propertiesConfig.warmingTimeMs : 8000;
@@ -179,7 +173,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         #endregion
 
 
-        private void SendIrCommand(string cmd)
+        public void SendIrCommand(string cmd)
         {
             if (string.IsNullOrEmpty(cmd))
             {
@@ -187,17 +181,17 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 return;
             }
 
-            var irCmd = IrStandardCommands.GetCommandValue(cmd);
-            if (string.IsNullOrEmpty(irCmd))
-            {
-                Debug.LogError(this, "SendIrCommand: ir command '{0}' not found", cmd);
-                return;
-            }
+            // var irCmd = IrStandardCommands.GetCommandValue(cmd);
+            // if (string.IsNullOrEmpty(irCmd))
+            // {
+            //     Debug.LogError(this, "SendIrCommand: ir command '{0}' not found", cmd);
+            //     return;
+            // }
 
             Debug.LogInformation(this, "SendIrCommand: ir command '{0}'", cmd);
 
-            irController?.Press(irCmd, true);
-            irController?.Press(irCmd, false);
+            irController?.Press(cmd, true);
+            irController?.Press(cmd, false);
         }
 
 
@@ -352,10 +346,20 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 if (string.IsNullOrEmpty(item.InputKey) || item.HideInput)
                     continue;
 
+                Debug.LogInformation(this, $"ProcessFriendlyNames: Adding input '{item.Name}' with key '{item.InputKey}'");
                 Inputs.Items[item.InputKey] = new LgDisplayIrInput(item.InputKey, item.Name, this);
 
                 if (!InputKeys.Contains(item.InputKey))
                     InputKeys.Add(item.InputKey);
+            }
+
+            foreach (var items in Inputs.Items)
+            {
+                Debug.LogInformation(this, $"ProcessFriendlyNames: Contains input item key-'{items.Key}' name-'{items.Value.Name}'");
+            }
+            foreach (var keys in InputKeys)
+            {
+                Debug.LogInformation(this, $"ProcessFriendlyNames: Contains input key-'{keys}'");
             }
         }
 

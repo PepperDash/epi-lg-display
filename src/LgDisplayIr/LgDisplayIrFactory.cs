@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Diagnostics;
 using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Config;
 
@@ -16,9 +17,15 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         public override EssentialsDevice BuildDevice(DeviceConfig dc)
         {
+            var irController = IRPortHelper.GetIrOutputPortController(dc);
+            if (irController == null)
+            {
+                Debug.WriteLine($"LgDisplayIrFactory: No IR Output Port Controller found for device '{dc.Key}'. Cannot create LgDisplayIrController");
+                return null;
+            }
             var propertiesConfig = dc.Properties.ToObject<LgDisplayPropertiesConfig>();
 
-            return propertiesConfig == null ? null : new LgDisplayIrController(dc.Key, dc.Name, propertiesConfig);
+            return propertiesConfig == null ? null : new LgDisplayIrController(dc.Key, dc.Name, propertiesConfig, irController);
         }
     }
 }

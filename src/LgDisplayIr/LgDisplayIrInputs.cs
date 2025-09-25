@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using PepperDash.Core;
 using PepperDash.Essentials.Core.DeviceTypeInterfaces;
 
 namespace PepperDash.Essentials.Plugins.Lg.Display
@@ -82,8 +83,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         public void Select()
         {
-            //_parent.SendData($"xb {_parent.Id} {Key}");
-            // TODO - Implement IR Input Selection
+            Debug.LogInformation($"LgDisplayIrInput: Select() called for Key-'{Key}', Name-'{Name}', Parent-'[{parent.Key}]-{parent.Name}'");
             parent.ExecuteSwitch(Key);
         }
     }
