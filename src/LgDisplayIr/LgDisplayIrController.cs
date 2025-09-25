@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Crestron.SimplSharpPro;
 using Crestron.SimplSharpPro.DeviceSupport;
-using Crestron.SimplSharpPro.DM.Cards;
 using Epi.Display.Lg;
 using PepperDash.Core;
 using PepperDash.Essentials.Core;
@@ -23,7 +23,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         public const int InputPowerOn = 101;
         public const int InputPowerOff = 102;
 
-        public static List<string> InputKeys = new List<string>();
         public ISelectableItems<string> Inputs { get; private set; }
 
 
@@ -50,23 +49,25 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         }
 
 
-        public LgDisplayIrController(string key, string name, LgDisplayPropertiesConfig propertiesConfig, IrOutputPortController irOutputPortController)
+        public LgDisplayIrController(string key, string name, LgDisplayPropertiesConfig config)
             : base(key, name)
         {
-            this.propertiesConfig = propertiesConfig;
+            this.propertiesConfig = config;
             if (propertiesConfig == null)
             {
                 Debug.LogError(this, "Display configuration must be included");
-
                 return;
             }
 
-            irController = new GenericIrController(key, name, irOutputPortController);
-            if (irController == null)
+            AddPostActivationAction(() =>
             {
-                Debug.LogError(this, $"GenericIrController could not be built for device '{key}'");
-                return;
-            }
+                irController = DeviceManager.GetDeviceForKey(propertiesConfig.irDeviceKey) as GenericIrController;
+                if (irController == null)
+                {
+                    Debug.LogError(this, $"GenericIrController '{propertiesConfig.irDeviceKey}' could not be found");
+                    return;
+                }
+            });
 
             CooldownTime = propertiesConfig.coolingTimeMs > 0 ? propertiesConfig.coolingTimeMs : 10000;
             WarmupTime = propertiesConfig.warmingTimeMs > 0 ? propertiesConfig.warmingTimeMs : 8000;
@@ -91,18 +92,18 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             return base.CustomActivate();
         }
 
-        protected override void CreateMobileControlMessengers()
-        {
-            var mc = DeviceManager.AllDevices.OfType<IMobileControl>().FirstOrDefault();
-            if (mc == null)
-            {
-                Debug.LogInformation("Mobile Control not found");
-                return;
-            }
+        // protected override void CreateMobileControlMessengers()
+        // {
+        //     var mc = DeviceManager.AllDevices.OfType<IMobileControl>().FirstOrDefault();
+        //     if (mc == null)
+        //     {
+        //         Debug.LogInformation("Mobile Control not found");
+        //         return;
+        //     }
 
-            var messenger = new LgDisplayIrMobileControlMessenger($"{Key}", $"/device/{Key}", this);
-            mc.AddDeviceMessenger(messenger);
-        }
+        //     var messenger = new LgDisplayIrMobileControlMessenger($"{Key}", $"/device/{Key}", this);
+        //     mc.AddDeviceMessenger(messenger);
+        // }
 
 
         #region IBridgeAdvanced Members
@@ -326,40 +327,47 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 new RoutingInputPort(RoutingPortNames.AnyVideoIn, eRoutingSignalType.Audio | eRoutingSignalType.Video,
                     eRoutingPortConnectionType.Streaming, new Action(InputPrimeVideo), this), IrStandardCommands.PrimeVideo);
 
-            ProcessFriendlyNames(propertiesConfig);
+            Inputs = new LgDisplayIrInputs
+            {
+                Items = new Dictionary<string, ISelectableItem>
+                {
+                    { "hdmi1", new LgDisplayIrInput("hdmi1", "HDMI 1", this) },
+                    { "hdmi2", new LgDisplayIrInput("hdmi2", "HDMI 2", this) },
+                    { "hdmi3", new LgDisplayIrInput("hdmi3", "HDMI 3", this) },
+                    { "hdmi4", new LgDisplayIrInput("hdmi4", "HDMI 4", this) },
+                    { "tv", new LgDisplayIrInput("tv", "TV", this) },
+                    { "antenna", new LgDisplayIrInput("antenna", "Antenna", this) },
+                    { "netflix", new LgDisplayIrInput("netflix", "Netflix", this) },
+                    { "primeVideo", new LgDisplayIrInput("primeVideo", "Prime Video", this) }
+                }
+            };
 
+            UpdateInputFriendlyNames(propertiesConfig);
         }
-        private void ProcessFriendlyNames(LgDisplayPropertiesConfig config)
+        private void UpdateInputFriendlyNames(LgDisplayPropertiesConfig config)
         {
             if (config?.FriendlyNames == null)
                 return;
 
-            Inputs = new LgDisplayIrInputs
-            {
-                Items = new Dictionary<string, ISelectableItem>()
-            };
-
-            InputKeys.Clear();
-
             foreach (var item in config.FriendlyNames)
             {
-                if (string.IsNullOrEmpty(item.InputKey) || item.HideInput)
+                Debug.LogInformation(this, $"UpdateInputFriendlyNames: key '{item.InputKey}', name '{item.Name}', hideInput '{item.HideInput}'");
+
+                if (string.IsNullOrEmpty(item.InputKey))
+                {
+                    Debug.LogError(this, "UpdateInputFriendlyNames: InputKey is null or empty");
                     continue;
+                }
 
-                Debug.LogInformation(this, $"ProcessFriendlyNames: Adding input '{item.Name}' with key '{item.InputKey}'");
-                Inputs.Items[item.InputKey] = new LgDisplayIrInput(item.InputKey, item.Name, this);
-
-                if (!InputKeys.Contains(item.InputKey))
-                    InputKeys.Add(item.InputKey);
-            }
-
-            foreach (var items in Inputs.Items)
-            {
-                Debug.LogInformation(this, $"ProcessFriendlyNames: Contains input item key-'{items.Key}' name-'{items.Value.Name}'");
-            }
-            foreach (var keys in InputKeys)
-            {
-                Debug.LogInformation(this, $"ProcessFriendlyNames: Contains input key-'{keys}'");
+                if (item.HideInput)
+                {
+                    Inputs.Items.Remove(item.InputKey);
+                }
+                else if (Inputs.Items.TryGetValue(item.InputKey, out var inputItem))
+                {
+                    var updatedInputItem = new LgDisplayIrInput(item.InputKey, item.Name, this);
+                    Inputs.Items[item.InputKey] = updatedInputItem;
+                }
             }
         }
 
