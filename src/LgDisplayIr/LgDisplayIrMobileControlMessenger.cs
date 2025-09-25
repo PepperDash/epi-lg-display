@@ -35,7 +35,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             // AddAction("/irCommand/primeVideo", (id, content) => PressAndHoldHandler.HandlePressAndHold(DeviceKey, content, device.InputPrimeVideo));
             AddAction("/volumeUp", (id, content) => PressAndHoldHandler.HandlePressAndHold(DeviceKey, content, device.VolumeUp));
             AddAction("/volumeDown", (id, content) => PressAndHoldHandler.HandlePressAndHold(DeviceKey, content, device.VolumeDown));
-            AddAction("/muteToggle", (id, content) => PressAndHoldHandler.HandlePressAndHold(DeviceKey, content, device.MuteToggle));
+            AddAction("/muteToggle", (id, content) => device.MuteToggle());
         }
     }
 }
