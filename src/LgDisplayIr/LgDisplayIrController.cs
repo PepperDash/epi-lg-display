@@ -18,8 +18,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         private readonly LgDisplayPropertiesConfig propertiesConfig;
 
         private GenericIrController irController;
-        private string irCommand;
-        public StringFeedback IrCommandFeedback { get; private set; }
 
         public const int InputPowerOn = 101;
         public const int InputPowerOff = 102;
@@ -72,11 +70,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 }
                 else
                 {
-                    Debug.LogInformation(this, "Using IR controller '{0}'", Key);
+                    Debug.LogInformation(this, "IR controller '{0}' successfully built", Key);
                 }
-
-                IrCommandFeedback = new StringFeedback(() => irCommand ?? string.Empty);
-
             });
 
             CooldownTime = propertiesConfig.coolingTimeMs > 0 ? propertiesConfig.coolingTimeMs : 10000;
@@ -188,7 +183,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             if (string.IsNullOrEmpty(cmd))
             {
-                Debug.LogError(this, "SendIrCommand: command is null or empty");
+                Debug.LogError(this, "SendIrCommand: ir command is null or empty");
                 return;
             }
 
@@ -199,9 +194,10 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 return;
             }
 
+            Debug.LogInformation(this, "SendIrCommand: ir command '{0}'", cmd);
+
             irController?.Press(irCmd, true);
             irController?.Press(irCmd, false);
-            Debug.LogInformation(this, "SendIrCommand: selector '{0}'", cmd);
         }
 
 
@@ -213,8 +209,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public override void PowerOn()
         {
-            irController?.Press(IrStandardCommands.PowerOn, true);
-            irController?.Press(IrStandardCommands.PowerOn, false);
+            Debug.LogInformation(this, "PowerOn: ir command '{0}'", IrStandardCommands.PowerOn);
+            SendIrCommand(IrStandardCommands.PowerOn);
         }
 
         /// <summary>
@@ -233,8 +229,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public override void PowerOff()
         {
-            irController?.Press(IrStandardCommands.PowerOff, true);
-            irController?.Press(IrStandardCommands.PowerOff, false);
+            Debug.LogInformation(this, "PowerOff: ir command '{0}'", IrStandardCommands.PowerOff);
+            SendIrCommand(IrStandardCommands.PowerOff);
         }
 
         /// <summary>
@@ -254,8 +250,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public override void PowerToggle()
         {
-            irController?.Press(IrStandardCommands.PowerToggle, true);
-            irController?.Press(IrStandardCommands.PowerToggle, false);
+            Debug.LogInformation(this, "PowerToggle: ir command '{0}'", IrStandardCommands.PowerToggle);
+            SendIrCommand(IrStandardCommands.PowerToggle);
         }
 
 
@@ -336,60 +332,30 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 new RoutingInputPort(RoutingPortNames.AnyVideoIn, eRoutingSignalType.Audio | eRoutingSignalType.Video,
                     eRoutingPortConnectionType.Streaming, new Action(InputPrimeVideo), this), IrStandardCommands.PrimeVideo);
 
-            Inputs = new LgDisplayIrInputs
-            {
-                Items = new Dictionary<string, ISelectableItem>
-                {
-                    {
-                        "hdmi1", new LgDisplayIrInput("hdmi1", "HDMI 1", this)
-                    },
-                    {
-                        "hdmi2", new LgDisplayIrInput("hdmi2", "HDMI 2", this)
-                    },
-                    {
-                        "hdmi3", new LgDisplayIrInput("hdmi3", "HDMI 3", this)
-                    },
-                    {
-                        "hdmi4", new LgDisplayIrInput("hdmi4", "HDMI 4", this)
-                    },
-                    {
-                        "tv", new LgDisplayIrInput("tv", "TV", this)
-                    },
-                    {
-                        "antenna", new LgDisplayIrInput("antenna", "Antenna", this)
-                    },
-                    {
-                        "netflix", new LgDisplayIrInput("netflix", "Netflix", this)
-                    },
-                    {
-                        "primeVideo", new LgDisplayIrInput("primeVideo", "Prime Video", this)
-                    }
-                }
-            };
-            ApplyFriendlyNames(propertiesConfig);
+            ProcessFriendlyNames(propertiesConfig);
 
         }
-        private void ApplyFriendlyNames(LgDisplayPropertiesConfig config)
+        private void ProcessFriendlyNames(LgDisplayPropertiesConfig config)
         {
-            if (config?.FriendlyNames == null || Inputs == null || Inputs.Items == null)
+            if (config?.FriendlyNames == null)
                 return;
 
-            foreach (var friendly in config.FriendlyNames)
+            Inputs = new LgDisplayIrInputs
             {
-                if (!string.IsNullOrEmpty(friendly.InputKey) && !string.IsNullOrEmpty(friendly.Name))
-                {
-                    if (friendly.HideInput)
-                    {
-                        // Remove the input if hideInput is true
-                        Inputs.Items.Remove(friendly.InputKey);
-                    }
-                    else if (Inputs.Items.TryGetValue(friendly.InputKey, out var input))
-                    {
-                        // Create a new instance of the input with the updated name  
-                        var updatedInput = new LgDisplayIrInput(input.Key, friendly.Name, this);
-                        Inputs.Items[friendly.InputKey] = updatedInput;
-                    }
-                }
+                Items = new Dictionary<string, ISelectableItem>()
+            };
+
+            InputKeys.Clear();
+
+            foreach (var item in config.FriendlyNames)
+            {
+                if (string.IsNullOrEmpty(item.InputKey) || item.HideInput)
+                    continue;
+
+                Inputs.Items[item.InputKey] = new LgDisplayIrInput(item.InputKey, item.Name, this);
+
+                if (!InputKeys.Contains(item.InputKey))
+                    InputKeys.Add(item.InputKey);
             }
         }
 
@@ -398,8 +364,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputHdmi1()
         {
-            irController?.Press(IrStandardCommands.InputHdmi1, true);
-            irController?.Press(IrStandardCommands.InputHdmi1, false);
+            Debug.LogInformation(this, "InputHdmi1: ir command '{0}'", IrStandardCommands.InputHdmi1);
+            SendIrCommand(IrStandardCommands.InputHdmi1);
         }
 
         /// <summary>
@@ -417,8 +383,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputHdmi2()
         {
-            irController?.Press(IrStandardCommands.InputHdmi2, true);
-            irController?.Press(IrStandardCommands.InputHdmi2, false);
+            Debug.LogInformation(this, "InputHdmi2: ir command '{0}'", IrStandardCommands.InputHdmi2);
+            SendIrCommand(IrStandardCommands.InputHdmi2);
         }
 
         /// <summary>
@@ -436,8 +402,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputHdmi3()
         {
-            irController?.Press(IrStandardCommands.InputHdmi3, true);
-            irController?.Press(IrStandardCommands.InputHdmi3, false);
+            Debug.LogInformation(this, "InputHdmi3: ir command '{0}'", IrStandardCommands.InputHdmi3);
+            SendIrCommand(IrStandardCommands.InputHdmi3);
         }
 
         /// <summary>
@@ -455,8 +421,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputHdmi4()
         {
-            irController?.Press(IrStandardCommands.InputHdmi4, true);
-            irController?.Press(IrStandardCommands.InputHdmi4, false);
+            Debug.LogInformation(this, "InputHdmi4: ir command '{0}'", IrStandardCommands.InputHdmi4);
+            SendIrCommand(IrStandardCommands.InputHdmi4);
         }
 
         /// <summary>
@@ -474,8 +440,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputTv()
         {
-            irController?.Press(IrStandardCommands.InputTv, true);
-            irController?.Press(IrStandardCommands.InputTv, false);
+            Debug.LogInformation(this, "InputTv: ir command '{0}'", IrStandardCommands.InputTv);
+            SendIrCommand(IrStandardCommands.InputTv);
         }
 
         /// <summary>
@@ -493,8 +459,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputAntenna()
         {
-            irController?.Press(IrStandardCommands.InputAntenna, true);
-            irController?.Press(IrStandardCommands.InputAntenna, false);
+            Debug.LogInformation(this, "InputAntenna: ir command '{0}'", IrStandardCommands.InputAntenna);
+            SendIrCommand(IrStandardCommands.InputAntenna);
         }
 
         /// <summary>
@@ -512,8 +478,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputNetflix()
         {
-            irController?.Press(IrStandardCommands.Netflix, true);
-            irController?.Press(IrStandardCommands.Netflix, false);
+            Debug.LogInformation(this, "InputNetflix: ir command '{0}'", IrStandardCommands.Netflix);
+            SendIrCommand(IrStandardCommands.Netflix);
         }
 
         /// <summary>
@@ -531,8 +497,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputPrimeVideo()
         {
-            irController?.Press(IrStandardCommands.PrimeVideo, true);
-            irController?.Press(IrStandardCommands.PrimeVideo, false);
+            Debug.LogInformation(this, "InputPrimeVideo: ir command '{0}'", IrStandardCommands.PrimeVideo);
+            SendIrCommand(IrStandardCommands.PrimeVideo);
         }
 
         /// <summary>
@@ -547,8 +513,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         public void InputToggle()
         {
-            irController?.Press(IrStandardCommands.InputToggle, true);
-            irController?.Press(IrStandardCommands.InputToggle, false);
+            Debug.LogInformation(this, "InputToggle: ir command '{0}'", IrStandardCommands.InputToggle);
+            SendIrCommand(IrStandardCommands.InputToggle);
         }
 
         public void InputToggle(bool pressRelease)
@@ -614,21 +580,23 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         public void VolumeUp(bool pressRelease)
         {
             if (pressRelease) return;
-            irController?.Press(IrStandardCommands.VolumeUp, true);
-            irController?.Press(IrStandardCommands.VolumeUp, false);
+
+            Debug.LogInformation(this, "VolumeUp: ir command '{0}'", IrStandardCommands.VolumeUp);
+            SendIrCommand(IrStandardCommands.VolumeUp);
         }
 
         public void VolumeDown(bool pressRelease)
         {
             if (pressRelease) return;
-            irController?.Press(IrStandardCommands.VolumeDown, true);
-            irController?.Press(IrStandardCommands.VolumeDown, false);
+
+            Debug.LogInformation(this, "VolumeDown: ir command '{0}'", IrStandardCommands.VolumeDown);
+            SendIrCommand(IrStandardCommands.VolumeDown);
         }
 
         public void MuteToggle()
         {
-            irController?.Press(IrStandardCommands.MuteToggle, true);
-            irController?.Press(IrStandardCommands.MuteToggle, false);
+            Debug.LogInformation(this, "MuteToggle: ir command '{0}'", IrStandardCommands.MuteToggle);
+            SendIrCommand(IrStandardCommands.MuteToggle);
         }
 
         public void MuteToggle(bool pressRelease)
