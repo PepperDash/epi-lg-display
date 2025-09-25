@@ -6,39 +6,39 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 {
     public class LgDisplayIrInputs : ISelectableItems<string>
     {
-        private Dictionary<string, ISelectableItem> _items = new Dictionary<string, ISelectableItem>();
+        private Dictionary<string, ISelectableItem> items = new Dictionary<string, ISelectableItem>();
 
         public Dictionary<string, ISelectableItem> Items
         {
             get
             {
-                return _items;
+                return items;
             }
             set
             {
-                if (_items == value)
+                if (items == value)
                     return;
 
-                _items = value;
+                items = value;
 
                 ItemsUpdated?.Invoke(this, null);
             }
         }
 
-        private string _currentItem;
+        private string currentItem;
 
         public string CurrentItem
         {
             get
             {
-                return _currentItem;
+                return currentItem;
             }
             set
             {
-                if (_currentItem == value)
+                if (currentItem == value)
                     return;
 
-                _currentItem = value;
+                currentItem = value;
 
                 CurrentItemChanged?.Invoke(this, null);
             }
@@ -51,15 +51,15 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
     public class LgDisplayIrInput : ISelectableItem
     {
-        private bool _isSelected;
+        private bool isSelected;
 
-        private readonly LgDisplayIrController _parent;
+        private readonly LgDisplayIrController parent;
 
         public LgDisplayIrInput(string key, string name, LgDisplayIrController parent)
         {
             Key = key;
             Name = name;
-            _parent = parent;
+            this.parent = parent;
         }
 
         public string Key { get; private set; }
@@ -69,16 +69,14 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         public bool IsSelected
         {
-            get { return _isSelected; }
+            get { return isSelected; }
             set
             {
-                if (value == _isSelected)
+                if (value == isSelected)
                     return;
 
-                _isSelected = value;
-                var handler = ItemUpdated;
-                if (handler != null)
-                    handler(this, EventArgs.Empty);
+                isSelected = value;
+                ItemUpdated?.Invoke(this, EventArgs.Empty);
             }
         }
 
@@ -86,6 +84,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             //_parent.SendData($"xb {_parent.Id} {Key}");
             // TODO - Implement IR Input Selection
+            parent.ExecuteSwitch(Key);
         }
     }
 }
