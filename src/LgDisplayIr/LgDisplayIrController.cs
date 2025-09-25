@@ -333,7 +333,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         }
         private void UpdateInputFriendlyNames(LgDisplayPropertiesConfig config)
         {
-            if (config?.FriendlyNames == null)
+            if (config?.FriendlyNames == null || Inputs?.Items == null)
                 return;
 
             foreach (var item in config.FriendlyNames)
