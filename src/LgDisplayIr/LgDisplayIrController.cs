@@ -603,12 +603,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             SendIrCommand(IrStandardCommands.MuteToggle);
         }
 
-        public void MuteToggle(bool pressRelease)
-        {
-            if (pressRelease) return;
-            MuteToggle();
-        }
-
         #endregion
     }
 }
