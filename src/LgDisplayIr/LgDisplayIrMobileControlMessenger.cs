@@ -6,7 +6,7 @@ using PepperDash.Essentials.AppServer.Messengers;
 
 namespace PepperDash.Essentials.Plugins.Lg.Display
 {
-    class LgDisplayIrMobileControlMessenger : MessengerBase
+    public class LgDisplayIrMobileControlMessenger : MessengerBase
     {
         private readonly LgDisplayIrController device;
         public LgDisplayIrMobileControlMessenger(string key, string messagePath, LgDisplayIrController device)
