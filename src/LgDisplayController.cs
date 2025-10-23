@@ -5,21 +5,21 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using Crestron.SimplSharp;
 using Crestron.SimplSharpPro.DeviceSupport;
+using Epi.Display.Lg;
 using PepperDash.Core;
+using PepperDash.Core.Logging;
 using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges;
-using PepperDash.Essentials.Core.Queues;
 using PepperDash.Essentials.Core.DeviceTypeInterfaces;
+using PepperDash.Essentials.Core.Queues;
 using PepperDash.Essentials.Devices.Displays;
-using Epi.Display.Lg;
 using TwoWayDisplayBase = PepperDash.Essentials.Devices.Common.Displays.TwoWayDisplayBase;
-using PepperDash.Core.Logging;
 
 
 namespace PepperDash.Essentials.Plugins.Lg.Display
 {
     public class LgDisplayController : TwoWayDisplayBase, IBasicVolumeWithFeedback, ICommunicationMonitor,
-        IInputHdmi1, IInputHdmi2, IInputHdmi3, IInputDisplayPort1, IBridgeAdvanced ,IHasInputs<string>, IBasicVideoMuteWithFeedback, IWarmingCooling
+        IInputHdmi1, IInputHdmi2, IInputHdmi3, IInputHdmi4, IInputDisplayPort1, IBridgeAdvanced, IHasInputs<string>, IBasicVideoMuteWithFeedback, IWarmingCooling
     {
         GenericQueue ReceiveQueue;
         public const int InputPowerOn = 101;
@@ -35,7 +35,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         private bool _isSerialComm;
         private bool _isWarmingUp;
         private bool _lastCommandSentWasVolume;
-        private int _lastVolumeSent;        
+        private int _lastVolumeSent;
         private bool _powerIsOn;
         private bool _videoIsMuted;
         private ActionIncrementer _volumeIncrementer;
@@ -58,7 +58,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             var props = config;
             if (props == null)
             {
-                Debug.LogError(this,"Display configuration must be included");                               
+                Debug.LogError(this, "Display configuration must be included");
                 return;
             }
             _smallDisplay = props.SmallDisplay;
@@ -70,7 +70,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             _coolingTimeMs = props.coolingTimeMs > 0 ? props.coolingTimeMs : 10000;
             _warmingTimeMs = props.warmingTimeMs > 0 ? props.warmingTimeMs : 8000;
             //UdpSocketKey = props.udpSocketKey;
-     
+
             InputNumberFeedback = new IntFeedback(() =>
             {
                 return InputNumber;
@@ -114,8 +114,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                         IsCoolingDown = false;
                     }, CooldownTime);
                 }
-                
-                PowerIsOnFeedback.FireUpdate();               
+
+                PowerIsOnFeedback.FireUpdate();
             }
         }
 
@@ -178,7 +178,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         }
 
         private bool ScaleVolume { get; set; }
-        
+
         protected override Func<bool> PowerIsOnFeedbackFunc
         {
             get { return () => PowerIsOn; }
@@ -195,7 +195,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         }
 
         protected override Func<string> CurrentInputFeedbackFunc
-        {     
+        {
             get { return () => _currentInputPort != null ? _currentInputPort.Key : string.Empty; }
         }
 
@@ -222,11 +222,11 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             _lastVolumeSent = level;
             if (!ScaleVolume)
             {
-                scaled = (int) NumericalHelpers.Scale(level, 0, 65535, 0, 100);
+                scaled = (int)NumericalHelpers.Scale(level, 0, 65535, 0, 100);
             }
             else
             {
-                scaled = (int) NumericalHelpers.Scale(level, 0, 65535, _lowerLimit, _upperLimit);
+                scaled = (int)NumericalHelpers.Scale(level, 0, 65535, _lowerLimit, _upperLimit);
             }
 
             SendData(string.Format("kf {0} {1}", Id, scaled));
@@ -486,7 +486,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             if (!ScaleVolume)
             {
                 _volumeIncrementer = new ActionIncrementer(655, 0, 65535, 800, 80,
-                    v => SetVolume((ushort) v),
+                    v => SetVolume((ushort)v),
                     () => _lastVolumeSent);
             }
             else
@@ -494,8 +494,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 var scaleUpper = NumericalHelpers.Scale(_upperLimit, 0, 100, 0, 65535);
                 var scaleLower = NumericalHelpers.Scale(_lowerLimit, 0, 100, 0, 65535);
 
-                _volumeIncrementer = new ActionIncrementer(655, (int) scaleLower, (int) scaleUpper, 800, 80,
-                    v => SetVolume((ushort) v),
+                _volumeIncrementer = new ActionIncrementer(655, (int)scaleLower, (int)scaleUpper, 800, 80,
+                    v => SetVolume((ushort)v),
                     () => _lastVolumeSent);
             }
 
@@ -512,6 +512,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             AddRoutingInputPort(
                 new RoutingInputPort(RoutingPortNames.HdmiIn3, eRoutingSignalType.Audio | eRoutingSignalType.Video,
                     eRoutingPortConnectionType.Hdmi, new Action(InputHdmi3), this), "92");
+            AddRoutingInputPort(
+                new RoutingInputPort(RoutingPortNames.HdmiIn4, eRoutingSignalType.Audio | eRoutingSignalType.Video,
+                    eRoutingPortConnectionType.Hdmi, new Action(InputHdmi4), this), "93");
             AddRoutingInputPort(
                 new RoutingInputPort(RoutingPortNames.DisplayPortIn, eRoutingSignalType.Audio | eRoutingSignalType.Video,
                     eRoutingPortConnectionType.DisplayPort, new Action(InputDisplayPort1), this), "c0");
@@ -547,46 +550,39 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             {
                 Items = new Dictionary<string, ISelectableItem>
                 {
-                    {
-                        "90", new LgInput("90", "HDMI 1", this)
-                    },
-                    {
-                        "91", new LgInput("91", "HDMI 2", this)
-                    },
-                    {
-                        "92", new LgInput("92", "HDMI 3", this)
-                    },
-                    {
-                        "c0", new LgInput("c0", "DisplayPort", this)
-                    },
+                    { "90", new LgInput("90", "HDMI 1", this) },
+                    { "91", new LgInput("91", "HDMI 2", this) },
+                    { "92", new LgInput("92", "HDMI 3", this) },
+                    { "93", new LgInput("93", "HDMI 4", this) },
+                    { "c0", new LgInput("c0", "DisplayPort", this) },
                 }
             };
             ApplyFriendlyNames(_config);
 
-            }
+        }
         private void ApplyFriendlyNames(LgDisplayPropertiesConfig config)
-            {
+        {
             if (config?.FriendlyNames == null || Inputs == null || Inputs.Items == null)
                 return;
 
             foreach (var friendly in config.FriendlyNames)
-                {
+            {
                 if (!string.IsNullOrEmpty(friendly.InputKey) && !string.IsNullOrEmpty(friendly.Name))
-                    {
+                {
                     if (friendly.HideInput)
-                        {
+                    {
                         // Remove the input if hideInput is true
                         Inputs.Items.Remove(friendly.InputKey);
-                        }
+                    }
                     else if (Inputs.Items.TryGetValue(friendly.InputKey, out var input))
-                        {
+                    {
                         // Create a new instance of the input with the updated name  
                         var updatedInput = new LgInput(input.Key, friendly.Name, this);
                         Inputs.Items[friendly.InputKey] = updatedInput;
-                        }
                     }
                 }
             }
+        }
 
         private void CommunicationMonitor_StatusChange(object sender, MonitorStatusChangeEventArgs e)
         {
@@ -618,7 +614,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             if (data.Length < 3)
             {
                 Debug.LogVerbose(this, "Unable to parse message, not enough data in message: {0}", s);
-                return;      
+                return;
             }
             else
             {
@@ -630,7 +626,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             // Normalize both IDs to integers for comparison (handles "1" vs "01")
             if (!NormalizeId(id).Equals(NormalizeId(Id)))
             {
-                Debug.LogVerbose(this, "Device ID Mismatch - Expected: {0} (normalized: {1}), Received: {2} (normalized: {3}) - Discarding Response", 
+                Debug.LogVerbose(this, "Device ID Mismatch - Expected: {0} (normalized: {1}), Received: {2} (normalized: {3}) - Discarding Response",
                     Id, NormalizeId(Id), id, NormalizeId(id));
                 return;
             }
@@ -714,21 +710,21 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 }
 
                 var portIndex = value - 1;
-                
+
                 var port = GetInputPort(portIndex);
                 if (port == null)
                 {
                     Debug.LogError(this, "SetInput: Port at index {0} is null", portIndex);
                     return;
                 }
-                    
+
                 if (port.Selector is Action action)
                 {
                     ExecuteSwitch(action);
                 }
                 else
                 {
-                    Debug.LogError(this, "SetInput: Port selector is not an Action! Type: {0}", 
+                    Debug.LogError(this, "SetInput: Port selector is not an Action! Type: {0}",
                         port.Selector?.GetType().Name ?? "NULL");
                 }
             }
@@ -789,6 +785,14 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         public void InputHdmi3()
         {
             SendData(string.Format("xb {0} 92", Id));
+        }
+
+        /// <summary>
+        /// Select Hdmi 4 Input
+        /// </summary>
+        public void InputHdmi4()
+        {
+            SendData(string.Format("xb {0} 93", Id));
         }
 
         /// <summary>
@@ -860,7 +864,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             if (_isSerialComm || _overrideWol)
             {
-                SendData(string.Format("ka {0} {1}", Id, _smallDisplay ? "1": "01"));
+                SendData(string.Format("ka {0} {1}", Id, _smallDisplay ? "1" : "01"));
             }
         }
 
@@ -919,8 +923,11 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     case "hdmiIn3":
                         InputNumber = 3;
                         break;
-                    case "displayPortIn":
+                    case "hdmiIn4":
                         InputNumber = 4;
+                        break;
+                    case "displayPortIn":
+                        InputNumber = 5;
                         break;
                 }
             }

@@ -361,7 +361,7 @@ MigrationBackup/
 .ionide/
 
 # VS Code settings folders
-.vscode/
+# .vscode/
 *.projectinfo
 /output/epi-display-lg.4Series.1.0.0-local.cplz
 /src/._epi-display-lg.4Series.csproj

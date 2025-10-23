@@ -1,11 +1,11 @@
-﻿using Newtonsoft.Json;
+﻿using System.Collections.Generic;
+using Newtonsoft.Json;
 using PepperDash.Core;
-using System.Collections.Generic;
 
 namespace PepperDash.Essentials.Plugins.Lg.Display
 {
-	public class LgDisplayPropertiesConfig
-	{
+    public class LgDisplayPropertiesConfig
+    {
         [JsonProperty("id")]
         public string Id { get; set; }
 
@@ -40,13 +40,13 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         public List<FriendlyName> FriendlyNames { get; set; }
 
         public LgDisplayPropertiesConfig()
-            {
+        {
             FriendlyNames = new List<FriendlyName>();
-            }
         }
+    }
 
     public class FriendlyName
-       {
+    {
         [JsonProperty("inputKey")]
         public string InputKey { get; set; }
 
@@ -54,7 +54,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         public string Name { get; set; }
 
         [JsonProperty("hideInput")]
-        public bool HideInput { get; set; } 
-        }
-
+        public bool HideInput { get; set; }
     }
+
+}
