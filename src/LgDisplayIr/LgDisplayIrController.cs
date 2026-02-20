@@ -64,30 +64,15 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 return;
             }
 
+            SetupInputs();
+
+
             DeviceManager.AddDevice(irController);
 
             CooldownTime = propertiesConfig.coolingTimeMs > 0 ? propertiesConfig.coolingTimeMs : 10000;
             WarmupTime = propertiesConfig.warmingTimeMs > 0 ? propertiesConfig.warmingTimeMs : 8000;
         }
 
-        /// <summary>
-        /// Initialization of the device
-        /// </summary>
-        public override void Initialize()
-        {
-            SetupInputs();
-
-            base.Initialize();
-        }
-
-        /// <summary>
-        /// Custom Activate
-        /// </summary>
-        /// <returns></returns>
-        public override bool CustomActivate()
-        {
-            return base.CustomActivate();
-        }
 
         // protected override void CreateMobileControlMessengers()
         // {
@@ -530,6 +515,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             Debug.LogInformation(this, $"ExecuteSwitch: selector '{selector}' type '{selector?.GetType().Name ?? "null"}'");
 
+
+
             string cmd = null;
 
             if (selector is RoutingInputPort port)
@@ -568,7 +555,26 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 }
             }
 
+            // if already on, just send command
             SendIrCommand(cmd);
+
+
+            // if warming up, wait for warmup to complete before sending command
+            EventHandler<FeedbackEventArgs> handler = null; // necessary to allow reference inside lambda to handler
+            handler = (o, a) =>
+            {
+                if (isWarmingUp)
+                {
+                    return;
+                }
+
+                IsWarmingUpFeedback.OutputChange -= handler;
+
+                SendIrCommand(cmd);
+
+            };
+            IsWarmingUpFeedback.OutputChange += handler; // attach and wait for on FB
+            PowerOn();
         }
 
         #endregion
