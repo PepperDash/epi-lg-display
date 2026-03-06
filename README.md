@@ -37,10 +37,24 @@ This repo contains a plugin for use with [PepperDash Essentials](https://github.
         "hardwareHandshake": "None",
         "stopBits": 1
       }
-    }
-    "friendlyNames": [                      //if you want to use friendly names, add this section
+    },
+    "activeInputs": [                       //optional: only expose these inputs in the plugin
+        {
+        	"key": "hdmiIn1",
+        	"name": "HDMI 1"
+        },
+        {
+        	"key": "hdmiIn2",
+        	"name": "HDMI 2"
+        },
+        {
+        	"key": "displayPortIn1",
+        	"name": "DisplayPort"
+        }
+        ],
+    "friendlyNames": [                      //optional: rename/hide configured inputs
 	        {
-	        	"inputKey": "90",           //The input key for the input you want to use a friendly name for, this has to a valid input key(90,91,c0)
+          	"inputKey": "90",           //input key to rename/hide (for example: 90, 91, 92, 93, c0)
 	        	"name": "Friendly Name 1",  //The desired name to be displayed on the screen
             "hideInput": false              //if set to true, the input will not be displayed in the list of inputs
 	        },
