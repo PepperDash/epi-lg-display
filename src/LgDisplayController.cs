@@ -552,9 +552,11 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
                 var activeInputsMap = _config.ActiveInputs
                     .Where(ai => !string.IsNullOrEmpty(ai.Key))
+                    .GroupBy(ai => ai.Key, StringComparer.OrdinalIgnoreCase)
                     .ToDictionary(
-                        ai => ai.Key.ToLower(),
-                        ai => ai.Name
+                        g => g.Key.ToLower(),
+                        g => g.Last().Name,
+                        StringComparer.OrdinalIgnoreCase
                     );
 
                 var allInputs = new Dictionary<string, KeyValuePair<string, LgInput>>
