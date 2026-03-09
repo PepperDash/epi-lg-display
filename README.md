@@ -21,7 +21,7 @@ This repo contains a plugin for use with [PepperDash Essentials](https://github.
     "volumeUpperLimit": 100,
     "volumeLowerLimit": 0,
     "pollIntervalMs": 45000,
-    "coolingTime": 10000,
+    "coolingTimeMs": 10000,
     "warmingTimeMs": 10000,
     "smallDisplay": false,
     "control": {
