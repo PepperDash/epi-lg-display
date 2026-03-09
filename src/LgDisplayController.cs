@@ -21,7 +21,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
     public class LgDisplayController : TwoWayDisplayBase, IBasicVolumeWithFeedback, ICommunicationMonitor,
         IInputHdmi1, IInputHdmi2, IInputHdmi3, IInputHdmi4, IInputDisplayPort1, IBridgeAdvanced, IHasInputs<string>, IBasicVideoMuteWithFeedback, IWarmingCooling
     {
-        GenericQueue ReceiveQueue;
+        GenericQueue receiveQueue;
         public const int InputPowerOn = 101;
         public const int InputPowerOff = 102;
         public static List<string> InputKeys = new List<string>();
@@ -52,7 +52,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             Communication = comms;
 
-            ReceiveQueue = new GenericQueue(key + "-queue");
+            receiveQueue = new GenericQueue(key + "-queue");
 
             _config = config;
             var props = config;
@@ -751,7 +751,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         private void PortGather_LineReceived(object sender, GenericCommMethodReceiveTextArgs args)
         {
-            ReceiveQueue.Enqueue(new ProcessStringMessage(args.Text, ProcessResponse));
+            receiveQueue.Enqueue(new ProcessStringMessage(args.Text, ProcessResponse));
         }
 
         private void ProcessResponse(string s)
@@ -1092,16 +1092,16 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 }
             }
 
-            if (Inputs.Items.ContainsKey(s))
+            if (Inputs.Items.ContainsKey(s.ToLowerInvariant()))
             {
 
                 foreach (var item in Inputs.Items)
                 {
-                    item.Value.IsSelected = item.Key.Equals(s);
+                    item.Value.IsSelected = item.Key.Equals(s.ToLowerInvariant());
                 }
             }
 
-            Inputs.CurrentItem = s;
+            Inputs.CurrentItem = s.ToLowerInvariant();
         }
 
         /// <summary>
