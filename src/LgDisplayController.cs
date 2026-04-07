@@ -123,13 +123,13 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             get
             {
-                this.LogVerbose("IsWarmingUp get: {0}", _isWarmingUp);
+                this.LogInformation("[TESTING] IsWarmingUp get: {0}", _isWarmingUp);
                 return _isWarmingUp;
             }
             set
             {
                 _isWarmingUp = value;
-                this.LogVerbose("IsWarmingUp set: {0}", _isWarmingUp);
+                this.LogInformation("[TESTING] IsWarmingUp set: {0}", _isWarmingUp);
 
                 IsWarmingUpFeedback.FireUpdate();
             }
@@ -139,13 +139,13 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             get
             {
-                this.LogVerbose("IsCoolingDown get: {0}", _isCoolingDown);
+                this.LogInformation("[TESTING] IsCoolingDown get: {0}", _isCoolingDown);
                 return _isCoolingDown;
             }
             set
             {
                 _isCoolingDown = value;
-                this.LogVerbose("IsCoolingDown set: {0}", _isCoolingDown);
+                this.LogInformation("[TESTING] IsCoolingDown set: {0}", _isCoolingDown);
 
                 IsCoolingDownFeedback.FireUpdate();
             }
@@ -836,33 +836,41 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// <param name="selector"></param>
         public override void ExecuteSwitch(object selector)
         {
+            this.LogInformation("[TESTING] ExecuteSwitch called with selector of type {0}", selector?.GetType().Name ?? "NULL");
+
             if (!(selector is Action action))
             {
-                Debug.LogError(this, "ExecuteSwitch: selector is not an Action! Type: {0}",
-                    selector?.GetType().Name ?? "NULL");
                 return;
             }
 
             if (PowerIsOn)
             {
+                this.LogInformation("[TESTING] Power is already on. Executing action.");
                 action();
             }
             else if (IsCoolingDown)
             {
+                this.LogInformation("[TESTING] Device is cooling down. Powering on and executing action after cooldown.");
                 CrestronInvoke.BeginInvoke((o) =>
                 {
+                    this.LogInformation("[TESTING] Cooldown complete. Powering on.");
                     CrestronEnvironment.Sleep((int)CooldownTime);
                     PowerOn();
+                    this.LogInformation("[TESTING] Warmup time starting.");
                     CrestronEnvironment.Sleep((int)WarmupTime);
+                    this.LogInformation("[TESTING] Warmup complete. Executing action.");
                     action();
                 });
             }
             else
             {
+                this.LogInformation("[TESTING] Power is off. Powering on and executing action after warmup.");
                 PowerOn();
                 CrestronInvoke.BeginInvoke((o) =>
                 {
+                    this.LogInformation("[TESTING] Warmup time starting.");
                     CrestronEnvironment.Sleep((int)WarmupTime);
+                    this.LogInformation("[TESTING] Warmup complete. Executing action.");
                     action();
                 });
             }
