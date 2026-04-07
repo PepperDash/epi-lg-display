@@ -836,42 +836,35 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// <param name="selector"></param>
         public override void ExecuteSwitch(object selector)
         {
-            //if (!(selector is Action))
-            //    Debug.LogDebug(this, "WARNING: ExecuteSwitch cannot handle type {0}", selector.GetType());
+            if (!(selector is Action action))
+            {
+                Debug.LogError(this, "ExecuteSwitch: selector is not an Action! Type: {0}",
+                    selector?.GetType().Name ?? "NULL");
+                return;
+            }
 
             if (PowerIsOn)
             {
-                var action = selector as Action;
-                if (action != null)
-                {
-                    action();
-                }
-                else
-                {
-                    Debug.LogError(this, "ExecuteSwitch: selector is not an Action! Type: {0}", selector?.GetType().Name ?? "NULL");
-                }
+                action();
             }
-            else // if power is off, wait until we get on FB to send it. 
+            else if (IsCoolingDown)
             {
-                // One-time event handler to wait for power on before executing switch
-                EventHandler<FeedbackEventArgs> handler = null; // necessary to allow reference inside lambda to handler
-                handler = (o, a) =>
+                CrestronInvoke.BeginInvoke((o) =>
                 {
-                    if (_isWarmingUp)
-                    {
-                        return;
-                    }
-
-                    IsWarmingUpFeedback.OutputChange -= handler;
-
-                    var action = selector as Action;
-                    if (action != null)
-                    {
-                        action();
-                    }
-                };
-                IsWarmingUpFeedback.OutputChange += handler; // attach and wait for on FB
+                    CrestronEnvironment.Sleep((int)CooldownTime);
+                    PowerOn();
+                    CrestronEnvironment.Sleep((int)WarmupTime);
+                    action();
+                });
+            }
+            else
+            {
                 PowerOn();
+                CrestronInvoke.BeginInvoke((o) =>
+                {
+                    CrestronEnvironment.Sleep((int)WarmupTime);
+                    action();
+                });
             }
         }
 
@@ -1105,6 +1098,10 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             CrestronInvoke.BeginInvoke((o) =>
                 {
                     PowerGet();
+
+                    if (IsWarmingUp || IsCoolingDown)
+                        return;
+
                     CrestronEnvironment.Sleep(1500);
                     InputGet();
                     CrestronEnvironment.Sleep(1500);
