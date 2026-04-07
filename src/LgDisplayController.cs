@@ -98,8 +98,15 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
                 if (_powerIsOn)
                 {
-                    IsWarmingUp = true;
+                    if (CooldownTimer != null)
+                    {
+                        CooldownTimer.Stop();
+                        CooldownTimer.Dispose();
+                        CooldownTimer = null;
+                    }
+                    IsCoolingDown = false;
 
+                    IsWarmingUp = true;
                     WarmupTimer = new CTimer(o =>
                     {
                         IsWarmingUp = false;
@@ -107,8 +114,15 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 }
                 else
                 {
-                    IsCoolingDown = true;
+                    if (WarmupTimer != null)
+                    {
+                        WarmupTimer.Stop();
+                        WarmupTimer.Dispose();
+                        WarmupTimer = null;
+                    }
+                    IsWarmingUp = false;
 
+                    IsCoolingDown = true;
                     CooldownTimer = new CTimer(o =>
                     {
                         IsCoolingDown = false;
