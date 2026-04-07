@@ -95,55 +95,29 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 }
 
                 _powerIsOn = value;
-
-                if (_powerIsOn)
-                {
-                    if (CooldownTimer != null)
-                    {
-                        CooldownTimer.Stop();
-                        CooldownTimer.Dispose();
-                        CooldownTimer = null;
-                    }
-                    IsCoolingDown = false;
-
-                    IsWarmingUp = true;
-                    WarmupTimer = new CTimer(o =>
-                    {
-                        IsWarmingUp = false;
-                    }, WarmupTime);
-                }
-                else
-                {
-                    if (WarmupTimer != null)
-                    {
-                        WarmupTimer.Stop();
-                        WarmupTimer.Dispose();
-                        WarmupTimer = null;
-                    }
-                    IsWarmingUp = false;
-
-                    IsCoolingDown = true;
-                    CooldownTimer = new CTimer(o =>
-                    {
-                        IsCoolingDown = false;
-                    }, CooldownTime);
-                }
-
                 PowerIsOnFeedback.FireUpdate();
             }
         }
 
         public bool IsWarmingUp
         {
-            get
-            {
-                this.LogInformation("***** TESTING ***** IsWarmingUp get: {0}", _isWarmingUp);
-                return _isWarmingUp;
-            }
+            get { return _isWarmingUp; }
             set
             {
+                if (_isWarmingUp == value) return;
+
                 _isWarmingUp = value;
-                this.LogInformation("***** TESTING ***** IsWarmingUp set: {0}", _isWarmingUp);
+
+                if (_isWarmingUp)
+                {
+                    WarmupTimer = new CTimer(o => { IsWarmingUp = false; }, WarmupTime);
+                }
+                else if (WarmupTimer != null)
+                {
+                    WarmupTimer.Stop();
+                    WarmupTimer.Dispose();
+                    WarmupTimer = null;
+                }
 
                 IsWarmingUpFeedback.FireUpdate();
             }
@@ -151,15 +125,23 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         public bool IsCoolingDown
         {
-            get
-            {
-                this.LogInformation("***** TESTING ***** IsCoolingDown get: {0}", _isCoolingDown);
-                return _isCoolingDown;
-            }
+            get { return _isCoolingDown; }
             set
             {
+                if (_isCoolingDown == value) return;
+
                 _isCoolingDown = value;
-                this.LogInformation("***** TESTING ***** IsCoolingDown set: {0}", _isCoolingDown);
+
+                if (_isCoolingDown)
+                {
+                    CooldownTimer = new CTimer(o => { IsCoolingDown = false; }, CooldownTime);
+                }
+                else if (CooldownTimer != null)
+                {
+                    CooldownTimer.Stop();
+                    CooldownTimer.Dispose();
+                    CooldownTimer = null;
+                }
 
                 IsCoolingDownFeedback.FireUpdate();
             }
@@ -900,6 +882,12 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             {
                 SendData(string.Format("ka {0} {1}", Id, _smallDisplay ? "1" : "01"));
             }
+
+            if (PowerIsOn)
+                return;
+
+            IsCoolingDown = false;
+            IsWarmingUp = true;
         }
 
         /// <summary>
@@ -908,6 +896,12 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         public override void PowerOff()
         {
             SendData(string.Format("ka {0} {1}", Id, _smallDisplay ? "0" : "00"));
+
+            if (!PowerIsOn)
+                return;
+
+            IsWarmingUp = false;
+            IsCoolingDown = true;
         }
 
         /// <summary>
