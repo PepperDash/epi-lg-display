@@ -878,16 +878,26 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public override void PowerOn()
         {
-            if (_isSerialComm || _overrideWol)
+            // if (PowerIsOn)
+            //     return;
+
+            this.LogInformation("***** TESTING ***** PowerOn called. IsWarmingUp: {0}, IsCoolingDown: {1}", IsWarmingUp, IsCoolingDown);
+
+            if (IsCoolingDown)
             {
-                SendData(string.Format("ka {0} {1}", Id, _smallDisplay ? "1" : "01"));
+                this.LogInformation("***** TESTING ***** Device is cooling down. Powering on after cooldown completes.");
+
+                CrestronInvoke.BeginInvoke((o) =>
+                {
+                    this.LogInformation("***** TESTING ***** Cooldown complete. Powering on.");
+                    CrestronEnvironment.Sleep((int)CooldownTime);
+                    this.LogInformation("***** TESTING ***** Powering on.");
+                    SendPowerOn();
+                });
+                return;
             }
 
-            if (PowerIsOn)
-                return;
-
-            IsCoolingDown = false;
-            IsWarmingUp = true;
+            SendPowerOn();
         }
 
         /// <summary>
@@ -895,10 +905,44 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public override void PowerOff()
         {
-            SendData(string.Format("ka {0} {1}", Id, _smallDisplay ? "0" : "00"));
+            // if (!PowerIsOn)
+            //     return;
 
-            if (!PowerIsOn)
+            this.LogInformation("***** TESTING ***** PowerOff called. IsWarmingUp: {0}, IsCoolingDown: {1}", IsWarmingUp, IsCoolingDown);
+
+            if (IsWarmingUp)
+            {
+                CrestronInvoke.BeginInvoke((o) =>
+                {
+                    this.LogInformation("***** TESTING ***** Device is warming up. Powering off after warmup completes.");
+                    CrestronEnvironment.Sleep((int)WarmupTime);
+                    this.LogInformation("***** TESTING ***** Warmup complete. Powering off.");
+                    SendPowerOff();
+                });
                 return;
+            }
+
+            SendPowerOff();
+        }
+
+        private void SendPowerOn()
+        {
+            this.LogInformation("***** TESTING ***** SendPowerOn called.");
+
+            if (_isSerialComm || _overrideWol)
+            {
+                SendData(string.Format("ka {0} {1}", Id, _smallDisplay ? "1" : "01"));
+            }
+
+            IsCoolingDown = false;
+            IsWarmingUp = true;
+        }
+
+        private void SendPowerOff()
+        {
+            this.LogInformation("***** TESTING ***** SendPowerOff called.");
+            
+            SendData(string.Format("ka {0} {1}", Id, _smallDisplay ? "0" : "00"));
 
             IsWarmingUp = false;
             IsCoolingDown = true;
