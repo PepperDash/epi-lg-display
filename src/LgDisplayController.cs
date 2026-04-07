@@ -854,7 +854,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     PowerOn();
                     this.LogInformation("***** TESTING ***** Warmup time starting.");
                     CrestronEnvironment.Sleep((int)WarmupTime);
-                    this.LogInformation("***** TESTING ***** Warmup complete. Executing action.");
+                    this.LogInformation("***** TESTING ***** Warmup complete. Executing action after delay.");
+                    CrestronEnvironment.Sleep(1000);
                     action();
                 });
             }
@@ -866,7 +867,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 {
                     this.LogInformation("***** TESTING ***** Warmup time starting.");
                     CrestronEnvironment.Sleep((int)WarmupTime);
-                    this.LogInformation("***** TESTING ***** Warmup complete. Executing action.");
+                    this.LogInformation("***** TESTING ***** Warmup complete. Executing action after delay.");
+                    CrestronEnvironment.Sleep(1000);
                     action();
                 });
             }
@@ -941,7 +943,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         private void SendPowerOff()
         {
             this.LogInformation("***** TESTING ***** SendPowerOff called.");
-            
+
             SendData(string.Format("ka {0} {1}", Id, _smallDisplay ? "0" : "00"));
 
             IsWarmingUp = false;
