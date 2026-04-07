@@ -980,42 +980,25 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// <param name="s">response from device</param>
         public void UpdateInputFb(string s)
         {
-            var newInput = InputPorts.FirstOrDefault(i => i.FeedbackMatchObject.Equals(s.ToLower()));
+            var normalizedInput = s.ToLower();
+
+            var newInput = InputPorts.FirstOrDefault(i => i.FeedbackMatchObject.Equals(normalizedInput));
             if (newInput != null && newInput != _currentInputPort)
             {
                 _currentInputPort = newInput;
                 CurrentInputFeedback.FireUpdate();
-                var key = newInput.Key;
-                switch (key)
-                {
-                    case "hdmiIn1":
-                        InputNumber = 1;
-                        break;
-                    case "hdmiIn2":
-                        InputNumber = 2;
-                        break;
-                    case "hdmiIn3":
-                        InputNumber = 3;
-                        break;
-                    case "hdmiIn4":
-                        InputNumber = 4;
-                        break;
-                    case "displayPortIn":
-                        InputNumber = 5;
-                        break;
-                }
+                InputNumber = InputPorts.ToList().IndexOf(newInput) + 1;
             }
 
-            if (Inputs.Items.ContainsKey(s))
+            if (Inputs.Items.ContainsKey(normalizedInput))
             {
-
                 foreach (var item in Inputs.Items)
                 {
-                    item.Value.IsSelected = item.Key.Equals(s);
+                    item.Value.IsSelected = item.Key.Equals(normalizedInput);
                 }
-            }
 
-            Inputs.CurrentItem = s;
+                Inputs.CurrentItem = normalizedInput;
+            }
         }
 
         /// <summary>
