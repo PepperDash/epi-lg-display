@@ -121,20 +121,32 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         public bool IsWarmingUp
         {
-            get { return _isWarmingUp; }
+            get
+            {
+                this.LogVerbose("IsWarmingUp get: {0}", _isWarmingUp);
+                return _isWarmingUp;
+            }
             set
             {
                 _isWarmingUp = value;
+                this.LogVerbose("IsWarmingUp set: {0}", _isWarmingUp);
+
                 IsWarmingUpFeedback.FireUpdate();
             }
         }
 
         public bool IsCoolingDown
         {
-            get { return _isCoolingDown; }
+            get
+            {
+                this.LogVerbose("IsCoolingDown get: {0}", _isCoolingDown);
+                return _isCoolingDown;
+            }
             set
             {
                 _isCoolingDown = value;
+                this.LogVerbose("IsCoolingDown set: {0}", _isCoolingDown);
+
                 IsCoolingDownFeedback.FireUpdate();
             }
         }
@@ -379,6 +391,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             trilist.SetSigTrueAction(joinMap.PowerOn.JoinNumber, PowerOn);
             PowerIsOnFeedback.LinkInputSig(trilist.BooleanInput[joinMap.PowerOn.JoinNumber]);
 
+            IsCoolingDownFeedback.LinkInputSig(trilist.BooleanInput[joinMap.IsCoolingDown.JoinNumber]);
+            IsWarmingUpFeedback.LinkInputSig(trilist.BooleanInput[joinMap.IsWarmingUp.JoinNumber]);
+
             // input (digital select, digital feedback, names)
             for (var i = 0; i < InputPorts.Count; i++)
             {
@@ -392,7 +407,12 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     SetInput = inputIndex + 1;
                 });
 
-                trilist.StringInput[(ushort)(joinMap.InputNamesOffset.JoinNumber + inputIndex)].StringValue = string.IsNullOrEmpty(input.Key) ? string.Empty : input.Key;
+                var inputName = input.Key;
+                if (Inputs?.Items != null && input.FeedbackMatchObject is string fbMatch && Inputs.Items.TryGetValue(fbMatch, out var selectableItem))
+                {
+                    inputName = selectableItem.Name;
+                }
+                trilist.StringInput[(ushort)(joinMap.InputNamesOffset.JoinNumber + inputIndex)].StringValue = inputName ?? string.Empty;
 
                 if (InputFeedback != null && inputIndex < InputFeedback.Count)
                 {
@@ -558,7 +578,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 }
             };
             ApplyFriendlyNames(_config);
-
         }
         private void ApplyFriendlyNames(LgDisplayPropertiesConfig config)
         {
