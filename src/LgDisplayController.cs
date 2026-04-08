@@ -665,45 +665,41 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         private void ProcessResponse(string s)
         {
-            if (s.ToLower().Contains("ng"))
-            {
-                var ngData = s.Trim().Split(' ');
-                var ngCommand = ngData.Length >= 1 ? ngData[0] : string.Empty;
-
-                Debug.LogVerbose(this, "NG response received for command '{0}': {1}", ngCommand, s);
-
-                PollAfterNgResponse(ngCommand);
-
-                return;
-            }
-
-            //Example response for feedback of power.off from device: "a 1 OK01x"
-            // [0] = a
-            // [1] = 1
-            // [2] = 01x ('ok' relaced below)
-            var data = s.Trim().Replace("OK", "").Split(' ');
-
-            string command;
-            string id;
-            string responseValue;
+            // Expected format: "{command} {id} {OK|NG}{value}x"
+            // Example OK: "a 1 OK01x"  Example NG: "a 1 NG01x"
+            var data = s.Trim().Split(' ');
 
             if (data.Length < 3)
             {
-                Debug.LogVerbose(this, "Unable to parse message, not enough data in message: {0}", s);
+                this.LogVerbose("Unable to parse response, not enough data: {0}", s);
                 return;
             }
-            else
+
+            var command = data[0];
+            var id = data[1];
+            var statusAndValue = data[2];
+
+            // Check for NG response
+            if (statusAndValue.IndexOf("NG", StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                command = data[0];
-                id = data[1];
-                responseValue = data[2];
+                this.LogVerbose("NG response received for command '{0}': {1}", command, s);
+                PollAfterNgResponse(command);
+                return;
             }
 
+            // Strip OK prefix and trailing x delimiter
+            var responseValue = statusAndValue
+                .Replace("OK", "")
+                .TrimEnd('x');
+
             // Normalize both IDs to integers for comparison (handles "1" vs "01")
-            if (!NormalizeId(id).Equals(NormalizeId(Id)))
+            var normalizedReceived = NormalizeId(id);
+            var normalizedExpected = NormalizeId(Id);
+
+            if (!normalizedReceived.Equals(normalizedExpected))
             {
-                Debug.LogVerbose(this, "Device ID Mismatch - Expected: {0} (normalized: {1}), Received: {2} (normalized: {3}) - Discarding Response",
-                    Id, NormalizeId(Id), id, NormalizeId(id));
+                this.LogVerbose("Device ID Mismatch - Expected: {0} ({1}), Received: {2} ({3}) - Discarding",
+                    Id, normalizedExpected, id, normalizedReceived);
                 return;
             }
 
@@ -713,7 +709,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     UpdatePowerFb(responseValue);
                     break;
                 case "b":
-                    UpdateInputFb(responseValue.Replace("x", ""));
+                    UpdateInputFb(responseValue);
                     break;
                 case "f":
                     UpdateVolumeFb(responseValue);
