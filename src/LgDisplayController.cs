@@ -35,6 +35,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         private bool isSerialComm;
         private bool isWarmingUp;
         private bool inputSwitchPending;
+        private bool powerOnPending;
         private string lastCommandPrefix;
         private int lastVolumeSent;
         private bool powerIsOn;
@@ -55,7 +56,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
             receiveQueue = new GenericQueue(key + "-queue");
 
-      this.config = config;
+            this.config = config;
             var props = config;
             if (props == null)
             {
@@ -919,8 +920,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     {
                         CrestronEnvironment.Sleep((int)CooldownTime);
 
-                        this.LogVerbose("ExecuteSwitch: Cooldown complete. Powering on.");
-                        PowerOn();
+                        this.LogVerbose("ExecuteSwitch: Cooldown complete. Sending power on.");
+                        SendPowerOn();
 
                         CrestronEnvironment.Sleep((int)WarmupTime + 1000); // warmup time + 1000 for input switching delay                    
 
@@ -962,14 +963,24 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             if (IsCoolingDown)
             {
+                if (powerOnPending) return;
+
+                powerOnPending = true;
                 CrestronInvoke.BeginInvoke((o) =>
                 {
-                    this.LogVerbose("PowerOn: Device is cooling down. Powering on after cooldown completes.");
+                    try
+                    {
+                        this.LogVerbose("PowerOn: Device is cooling down. Powering on after cooldown completes.");
 
-                    CrestronEnvironment.Sleep((int)CooldownTime);
+                        CrestronEnvironment.Sleep((int)CooldownTime);
 
-                    this.LogVerbose("PowerOn: Cooldown complete. Powering on.");
-                    SendPowerOn();
+                        this.LogVerbose("PowerOn: Cooldown complete. Powering on.");
+                        SendPowerOn();
+                    }
+                    finally
+                    {
+                        powerOnPending = false;
+                    }
                 });
                 return;
             }
@@ -1001,21 +1012,33 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         private void SendPowerOn()
         {
+            var powerCommandSent = false;
+
             if (isSerialComm || overrideWol)
             {
                 SendData(string.Format("ka {0} {1}", Id, smallDisplay ? "1" : "01"));
+                powerCommandSent = true;
             }
 
-            IsCoolingDown = false;
-            IsWarmingUp = true;
+            if (powerCommandSent && !PowerIsOn)
+            {
+                IsCoolingDown = false;
+                IsWarmingUp = true;
+            }
         }
 
         private void SendPowerOff()
         {
+            var wasPowerOn = PowerIsOn;
+
             SendData(string.Format("ka {0} {1}", Id, smallDisplay ? "0" : "00"));
 
             IsWarmingUp = false;
-            IsCoolingDown = true;
+
+            if (wasPowerOn)
+            {
+                IsCoolingDown = true;
+            }
         }
 
         /// <summary>
