@@ -344,6 +344,11 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
         }
 
+        public void VideoMuteGet()
+        {
+            SendData(string.Format("kd {0} FF", Id));
+        }
+
         #endregion
 
         #region IBridgeAdvanced Members
@@ -609,10 +614,57 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             ReceiveQueue.Enqueue(new ProcessStringMessage(args.Text, ProcessResponse));
         }
 
+        private void PollAfterNgResponse(string ngCommand)
+        {
+            switch (ngCommand)
+            {
+                case "a":
+                    {
+                        PowerGet();
+                        break;
+                    }
+                case "b":
+                    {
+                        if (!PowerIsOn) return;
+
+                        InputGet();
+                        break;
+                    }
+                case "f":
+                    {
+                        if (!PowerIsOn) return;
+
+                        VolumeGet();
+                        break;
+                    }
+                case "e":
+                    {
+                        if (!PowerIsOn) return;
+
+                        MuteGet();
+                        break;
+                    }
+                case "d":
+                    {
+                        if (!PowerIsOn) return;
+
+                        VideoMuteGet();
+                        break;
+                    }
+            }
+        }
+
         private void ProcessResponse(string s)
         {
             if (s.ToLower().Contains("ng"))
             {
+                var ngData = s.Trim().Split(' ');
+                var ngCommand = ngData.Length >= 1 ? ngData[0] : string.Empty;
+
+                Debug.LogVerbose(this, "NG response received for command '{0}': {1}", ngCommand, s);
+
+                PollAfterNgResponse(ngCommand);
+
                 return;
             }
 
@@ -720,7 +772,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             {
                 if (value <= 0 || value > InputPorts.Count)
                 {
-                    Debug.LogError(this, "SetInput: Value {0} is out of range (1-{1})", value, InputPorts.Count);
+                    this.LogError("SetInput: Value {0} is out of range (1-{1})", value, InputPorts.Count);
                     return;
                 }
 
@@ -729,17 +781,18 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 var port = GetInputPort(portIndex);
                 if (port == null)
                 {
-                    Debug.LogError(this, "SetInput: Port at index {0} is null", portIndex);
+                    this.LogError("SetInput: Port at index {0} is null", portIndex);
                     return;
                 }
 
                 if (port.Selector is Action action)
                 {
+                    this.LogInformation("***** TESTING ***** SetInput: action is {0}", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
                     ExecuteSwitch(action);
                 }
                 else
                 {
-                    Debug.LogError(this, "SetInput: Port selector is not an Action! Type: {0}",
+                    this.LogError("SetInput: Port selector is not an Action! Type: {0}",
                         port.Selector?.GetType().Name ?? "NULL");
                 }
             }
@@ -757,7 +810,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             foreach (var inputPort in InputPorts)
             {
-                Debug.LogVerbose(this, "ListRoutingInputPorts: key-'{0}', connectionType-'{1}', feedbackMatchObject-'{2}'",
+                this.LogVerbose("ListRoutingInputPorts: key-'{0}', connectionType-'{1}', feedbackMatchObject-'{2}'",
                     inputPort.Key, inputPort.ConnectionType, inputPort.FeedbackMatchObject);
             }
         }
@@ -832,12 +885,15 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// <param name="selector"></param>
         public override void ExecuteSwitch(object selector)
         {
-            this.LogInformation("***** TESTING ***** ExecuteSwitch called with selector of type {0}", selector?.GetType().Name ?? "NULL");
+            this.LogInformation("***** TESTING ***** ExecuteSwitch: called with selector of type {0}", selector?.GetType().Name ?? "NULL");
 
             if (!(selector is Action action))
             {
+                this.LogInformation("***** TESTING ***** ExecuteSwitch: selector is not an Action. Type: {0}", selector?.GetType().Name ?? "NULL");
                 return;
             }
+
+            this.LogInformation("***** TESTING ***** ExecuteSwitch: action is {0}", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
 
             if (PowerIsOn)
             {
