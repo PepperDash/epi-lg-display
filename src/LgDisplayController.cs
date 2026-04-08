@@ -34,7 +34,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         private bool _isMuted;
         private bool _isSerialComm;
         private bool _isWarmingUp;
-        private bool _lastCommandSentWasVolume;
+        private string _lastCommandPrefix;
         private int _lastVolumeSent;
         private bool _powerIsOn;
         private bool _videoIsMuted;
@@ -750,15 +750,14 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// <param name="s"></param>
         public void SendData(string s)
         {
-            if (_lastCommandSentWasVolume)
+            var commandPrefix = s.Length >= 2 ? s.Substring(0, 2) : string.Empty;
+
+            if (_lastCommandPrefix == "kf" && commandPrefix != "kf")
             {
-                if (s[1] != 'f')
-                {
-                    CrestronEnvironment.Sleep(100);
-                }
+                CrestronEnvironment.Sleep(100);
             }
 
-            _lastCommandSentWasVolume = s[1] == 'f';
+            _lastCommandPrefix = commandPrefix;
 
             Communication.SendText(s + "\x0D");
         }
@@ -787,7 +786,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
                 if (port.Selector is Action action)
                 {
-                    this.LogInformation("***** TESTING ***** SetInput: action is {0}", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
+                    this.LogVerbose("SetInput: {0}", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
                     ExecuteSwitch(action);
                 }
                 else
@@ -876,7 +875,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputGet()
         {
-            SendData(string.Format("kb {0} FF", Id));
+            SendData(string.Format("xb {0} FF", Id));
         }
 
         /// <summary>
@@ -885,46 +884,43 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// <param name="selector"></param>
         public override void ExecuteSwitch(object selector)
         {
-            this.LogInformation("***** TESTING ***** ExecuteSwitch: called with selector of type {0}", selector?.GetType().Name ?? "NULL");
-
             if (!(selector is Action action))
             {
-                this.LogInformation("***** TESTING ***** ExecuteSwitch: selector is not an Action. Type: {0}", selector?.GetType().Name ?? "NULL");
+                this.LogVerbose("ExecuteSwitch: selector is not an Action. Type: {0}", selector?.GetType().Name ?? "NULL");
                 return;
             }
 
-            this.LogInformation("***** TESTING ***** ExecuteSwitch: action is {0}", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
+            this.LogVerbose("ExecuteSwitch: preparing to execute {0}", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
 
             if (PowerIsOn)
             {
-                this.LogInformation("***** TESTING ***** Power is already on. Executing action.");
                 action();
             }
             else if (IsCoolingDown)
             {
-                this.LogInformation("***** TESTING ***** Device is cooling down. Powering on and executing action after cooldown.");
+                this.LogVerbose("ExecuteSwitch: Device is cooling down. Powering on and executing {0} after cooldown.", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
                 CrestronInvoke.BeginInvoke((o) =>
                 {
-                    this.LogInformation("***** TESTING ***** Cooldown complete. Powering on.");
                     CrestronEnvironment.Sleep((int)CooldownTime);
+
+                    this.LogVerbose("ExecuteSwitch: Cooldown complete. Powering on.");
                     PowerOn();
-                    this.LogInformation("***** TESTING ***** Warmup time starting.");
-                    CrestronEnvironment.Sleep((int)WarmupTime);
-                    this.LogInformation("***** TESTING ***** Warmup complete. Executing action after delay.");
-                    CrestronEnvironment.Sleep(1000);
+
+                    CrestronEnvironment.Sleep((int)WarmupTime + 1000); // warmup time + 1000 for input switching delay                    
+
+                    this.LogVerbose("ExecuteSwitch: Warmup complete. Executing {0}.", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
                     action();
                 });
             }
             else
             {
-                this.LogInformation("***** TESTING ***** Power is off. Powering on and executing action after warmup.");
+                this.LogVerbose("ExecuteSwitch: Power is off. Powering on and executing {0} after warmup.", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
                 PowerOn();
                 CrestronInvoke.BeginInvoke((o) =>
                 {
-                    this.LogInformation("***** TESTING ***** Warmup time starting.");
-                    CrestronEnvironment.Sleep((int)WarmupTime);
-                    this.LogInformation("***** TESTING ***** Warmup complete. Executing action after delay.");
-                    CrestronEnvironment.Sleep(1000);
+                    CrestronEnvironment.Sleep((int)WarmupTime + 1000); // warmup time + 1000 for input switching delay                    
+
+                    this.LogVerbose("ExecuteSwitch: Warmup complete. Executing {0}.", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
                     action();
                 });
             }
@@ -936,20 +932,15 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public override void PowerOn()
         {
-            // if (PowerIsOn)
-            //     return;
-
-            this.LogInformation("***** TESTING ***** PowerOn called. IsWarmingUp: {0}, IsCoolingDown: {1}", IsWarmingUp, IsCoolingDown);
-
             if (IsCoolingDown)
             {
-                this.LogInformation("***** TESTING ***** Device is cooling down. Powering on after cooldown completes.");
-
                 CrestronInvoke.BeginInvoke((o) =>
                 {
-                    this.LogInformation("***** TESTING ***** Cooldown complete. Powering on.");
+                    this.LogVerbose("PowerOn: Device is cooling down. Powering on after cooldown completes.");
+
                     CrestronEnvironment.Sleep((int)CooldownTime);
-                    this.LogInformation("***** TESTING ***** Powering on.");
+
+                    this.LogVerbose("PowerOn: Cooldown complete. Powering on.");
                     SendPowerOn();
                 });
                 return;
@@ -963,18 +954,15 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public override void PowerOff()
         {
-            // if (!PowerIsOn)
-            //     return;
-
-            this.LogInformation("***** TESTING ***** PowerOff called. IsWarmingUp: {0}, IsCoolingDown: {1}", IsWarmingUp, IsCoolingDown);
-
             if (IsWarmingUp)
             {
                 CrestronInvoke.BeginInvoke((o) =>
                 {
-                    this.LogInformation("***** TESTING ***** Device is warming up. Powering off after warmup completes.");
+                    this.LogVerbose("PowerOff: Device is warming up. Powering off after warmup completes.");
+
                     CrestronEnvironment.Sleep((int)WarmupTime);
-                    this.LogInformation("***** TESTING ***** Warmup complete. Powering off.");
+
+                    this.LogVerbose("PowerOff: Warmup complete. Powering off.");
                     SendPowerOff();
                 });
                 return;
@@ -985,8 +973,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         private void SendPowerOn()
         {
-            this.LogInformation("***** TESTING ***** SendPowerOn called.");
-
             if (_isSerialComm || _overrideWol)
             {
                 SendData(string.Format("ka {0} {1}", Id, _smallDisplay ? "1" : "01"));
@@ -998,8 +984,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         private void SendPowerOff()
         {
-            this.LogInformation("***** TESTING ***** SendPowerOff called.");
-
             SendData(string.Format("ka {0} {1}", Id, _smallDisplay ? "0" : "00"));
 
             IsWarmingUp = false;
