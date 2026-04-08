@@ -21,31 +21,31 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
     public class LgDisplayController : TwoWayDisplayBase, IBasicVolumeWithFeedback, ICommunicationMonitor,
         IInputHdmi1, IInputHdmi2, IInputHdmi3, IInputHdmi4, IInputDisplayPort1, IBridgeAdvanced, IHasInputs<string>, IBasicVideoMuteWithFeedback, IWarmingCooling
     {
-        GenericQueue ReceiveQueue;
+        GenericQueue receiveQueue;
         public const int InputPowerOn = 101;
         public const int InputPowerOff = 102;
         public static List<string> InputKeys = new List<string>();
         public List<BoolFeedback> InputFeedback;
         public IntFeedback InputNumberFeedback;
-        private RoutingInputPort _currentInputPort;
-        private List<bool> _inputFeedback;
-        private int _inputNumber;
-        private bool _isCoolingDown;
-        private bool _isMuted;
-        private bool _isSerialComm;
-        private bool _isWarmingUp;
-        private bool _inputSwitchPending;
-        private string _lastCommandPrefix;
-        private int _lastVolumeSent;
-        private bool _powerIsOn;
-        private bool _videoIsMuted;
-        private ActionIncrementer _volumeIncrementer;
-        private bool _volumeIsRamping;
-        private ushort _volumeLevelForSig;
-        private readonly bool _smallDisplay;
-        private readonly bool _overrideWol;
+        private RoutingInputPort currentInputPort;
+        private List<bool> inputFeedback;
+        private int inputNumber;
+        private bool isCoolingDown;
+        private bool isMuted;
+        private bool isSerialComm;
+        private bool isWarmingUp;
+        private bool inputSwitchPending;
+        private string lastCommandPrefix;
+        private int lastVolumeSent;
+        private bool powerIsOn;
+        private bool videoIsMuted;
+        private ActionIncrementer volumeIncrementer;
+        private bool volumeIsRamping;
+        private ushort volumeLevelForSig;
+        private readonly bool smallDisplay;
+        private readonly bool overrideWol;
         //private GenericUdpServer _woLServer;
-        private readonly LgDisplayPropertiesConfig _config;
+        private readonly LgDisplayPropertiesConfig config;
 
 
         public LgDisplayController(string key, string name, LgDisplayPropertiesConfig config, IBasicCommunication comms)
@@ -53,23 +53,23 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             Communication = comms;
 
-            ReceiveQueue = new GenericQueue(key + "-queue");
+            receiveQueue = new GenericQueue(key + "-queue");
 
-            _config = config;
+      this.config = config;
             var props = config;
             if (props == null)
             {
                 Debug.LogError(this, "Display configuration must be included");
                 return;
             }
-            _smallDisplay = props.SmallDisplay;
+            smallDisplay = props.SmallDisplay;
             Id = !string.IsNullOrEmpty(props.Id) ? props.Id : "01";
-            _upperLimit = props.volumeUpperLimit;
-            _lowerLimit = props.volumeLowerLimit;
-            _overrideWol = props.OverrideWol;
-            _pollIntervalMs = props.pollIntervalMs > 1999 ? props.pollIntervalMs : 10000;
-            _coolingTimeMs = props.coolingTimeMs > 0 ? props.coolingTimeMs : 10000;
-            _warmingTimeMs = props.warmingTimeMs > 0 ? props.warmingTimeMs : 8000;
+            upperLimit = props.volumeUpperLimit;
+            lowerLimit = props.volumeLowerLimit;
+            overrideWol = props.OverrideWol;
+            pollIntervalMs = props.pollIntervalMs > 1999 ? props.pollIntervalMs : 10000;
+            coolingTimeMs = props.coolingTimeMs > 0 ? props.coolingTimeMs : 10000;
+            warmingTimeMs = props.warmingTimeMs > 0 ? props.warmingTimeMs : 8000;
             //UdpSocketKey = props.udpSocketKey;
 
             InputNumberFeedback = new IntFeedback(() =>
@@ -87,35 +87,35 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         public bool PowerIsOn
         {
-            get { return _powerIsOn; }
+            get { return powerIsOn; }
             set
             {
-                if (_powerIsOn == value)
+                if (powerIsOn == value)
                 {
                     return;
                 }
 
-                _powerIsOn = value;
+                powerIsOn = value;
                 PowerIsOnFeedback.FireUpdate();
             }
         }
 
         public bool IsWarmingUp
         {
-            get { return _isWarmingUp; }
+            get { return isWarmingUp; }
             set
             {
-                if (_isWarmingUp == value) return;
+                if (isWarmingUp == value) return;
 
-                _isWarmingUp = value;
+                isWarmingUp = value;
 
-                if (_isWarmingUp)
+                if (isWarmingUp)
                 {
                     WarmupTimer = new CTimer(o =>
                     {
                         IsWarmingUp = false;
 
-                        if (!_inputSwitchPending)
+                        if (!inputSwitchPending)
                         {
                             InputGet();
                         }
@@ -134,14 +134,14 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         public bool IsCoolingDown
         {
-            get { return _isCoolingDown; }
+            get { return isCoolingDown; }
             set
             {
-                if (_isCoolingDown == value) return;
+                if (isCoolingDown == value) return;
 
-                _isCoolingDown = value;
+                isCoolingDown = value;
 
-                if (_isCoolingDown)
+                if (isCoolingDown)
                 {
                     CooldownTimer = new CTimer(o => { IsCoolingDown = false; }, CooldownTime);
                 }
@@ -158,37 +158,37 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         public bool IsMuted
         {
-            get { return _isMuted; }
+            get { return isMuted; }
             set
             {
-                _isMuted = value;
+                isMuted = value;
                 MuteFeedback.FireUpdate();
             }
         }
         public bool VideoIsMuted
         {
-            get { return _videoIsMuted; }
+            get { return videoIsMuted; }
             set
             {
-                _videoIsMuted = value;
+                videoIsMuted = value;
                 VideoMuteIsOn.FireUpdate();
             }
         }
 
-        private readonly int _lowerLimit;
-        private readonly int _upperLimit;
-        private readonly uint _coolingTimeMs;
-        private readonly uint _warmingTimeMs;
-        private readonly long _pollIntervalMs;
+        private readonly int lowerLimit;
+        private readonly int upperLimit;
+        private readonly uint coolingTimeMs;
+        private readonly uint warmingTimeMs;
+        private readonly long pollIntervalMs;
 
         public int InputNumber
         {
-            get { return _inputNumber; }
+            get { return inputNumber; }
             private set
             {
-                if (_inputNumber == value) return;
+                if (inputNumber == value) return;
 
-                _inputNumber = value;
+                inputNumber = value;
                 InputNumberFeedback.FireUpdate();
                 UpdateBooleanFeedback(value);
             }
@@ -213,7 +213,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         protected override Func<string> CurrentInputFeedbackFunc
         {
-            get { return () => _currentInputPort != null ? _currentInputPort.Key : string.Empty; }
+            get { return () => currentInputPort != null ? currentInputPort.Key : string.Empty; }
         }
 
         #region IBasicVolumeWithFeedback Members
@@ -236,14 +236,14 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         public void SetVolume(ushort level)
         {
             int scaled;
-            _lastVolumeSent = level;
+            lastVolumeSent = level;
             if (!ScaleVolume)
             {
                 scaled = (int)NumericalHelpers.Scale(level, 0, 65535, 0, 100);
             }
             else
             {
-                scaled = (int)NumericalHelpers.Scale(level, 0, 65535, _lowerLimit, _upperLimit);
+                scaled = (int)NumericalHelpers.Scale(level, 0, 65535, lowerLimit, upperLimit);
             }
 
             SendData(string.Format("kf {0} {1}", Id, scaled));
@@ -254,7 +254,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void MuteOn()
         {
-            SendData(string.Format("ke {0} {1}", Id, _smallDisplay ? "0" : "00"));
+            SendData(string.Format("ke {0} {1}", Id, smallDisplay ? "0" : "00"));
         }
 
         /// <summary>
@@ -262,7 +262,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void MuteOff()
         {
-            SendData(string.Format("ke {0} {1}", Id, _smallDisplay ? "1" : "01"));
+            SendData(string.Format("ke {0} {1}", Id, smallDisplay ? "1" : "01"));
         }
 
         /// <summary>
@@ -288,13 +288,13 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             if (pressRelease)
             {
-                _volumeIncrementer.StartDown();
-                _volumeIsRamping = true;
+                volumeIncrementer.StartDown();
+                volumeIsRamping = true;
             }
             else
             {
-                _volumeIsRamping = false;
-                _volumeIncrementer.Stop();
+                volumeIsRamping = false;
+                volumeIncrementer.Stop();
             }
         }
 
@@ -306,13 +306,13 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             if (pressRelease)
             {
-                _volumeIncrementer.StartUp();
-                _volumeIsRamping = true;
+                volumeIncrementer.StartUp();
+                volumeIsRamping = true;
             }
             else
             {
-                _volumeIsRamping = false;
-                _volumeIncrementer.Stop();
+                volumeIsRamping = false;
+                volumeIncrementer.Stop();
             }
         }
 
@@ -327,7 +327,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void VideoMuteOn()
         {
-            SendData(string.Format("kd {0} {1}", Id, _smallDisplay ? "1" : "01"));
+            SendData(string.Format("kd {0} {1}", Id, smallDisplay ? "1" : "01"));
         }
 
         /// <summary>
@@ -335,7 +335,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void VideoMuteOff()
         {
-            SendData(string.Format("kd {0} {1}", Id, _smallDisplay ? "0" : "00"));
+            SendData(string.Format("kd {0} {1}", Id, smallDisplay ? "0" : "00"));
         }
 
         /// <summary>
@@ -480,13 +480,13 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         private void Init()
         {
-            WarmupTime = _warmingTimeMs > 0 ? _warmingTimeMs : 10000;
-            CooldownTime = _coolingTimeMs > 0 ? _coolingTimeMs : 8000;
+            WarmupTime = warmingTimeMs > 0 ? warmingTimeMs : 10000;
+            CooldownTime = coolingTimeMs > 0 ? coolingTimeMs : 8000;
 
-            _inputFeedback = new List<bool>();
+            inputFeedback = new List<bool>();
             InputFeedback = new List<BoolFeedback>();
 
-            if (_upperLimit != _lowerLimit && _upperLimit > _lowerLimit)
+            if (upperLimit != lowerLimit && upperLimit > lowerLimit)
             {
                 ScaleVolume = true;
             }
@@ -503,10 +503,10 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             else
             {
                 // This instance uses RS-232 Control
-                _isSerialComm = true;
+                isSerialComm = true;
             }
 
-            var pollInterval = _pollIntervalMs > 0 ? _pollIntervalMs : 10000;
+            var pollInterval = pollIntervalMs > 0 ? pollIntervalMs : 10000;
             CommunicationMonitor = new GenericCommunicationMonitor(this, Communication, pollInterval, 180000, 300000,
                 StatusGet);
             CommunicationMonitor.StatusChange += CommunicationMonitor_StatusChange;
@@ -515,22 +515,22 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
             if (!ScaleVolume)
             {
-                _volumeIncrementer = new ActionIncrementer(655, 0, 65535, 800, 80,
+                volumeIncrementer = new ActionIncrementer(655, 0, 65535, 800, 80,
                     v => SetVolume((ushort)v),
-                    () => _lastVolumeSent);
+                    () => lastVolumeSent);
             }
             else
             {
-                var scaleUpper = NumericalHelpers.Scale(_upperLimit, 0, 100, 0, 65535);
-                var scaleLower = NumericalHelpers.Scale(_lowerLimit, 0, 100, 0, 65535);
+                var scaleUpper = NumericalHelpers.Scale(upperLimit, 0, 100, 0, 65535);
+                var scaleLower = NumericalHelpers.Scale(lowerLimit, 0, 100, 0, 65535);
 
-                _volumeIncrementer = new ActionIncrementer(655, (int)scaleLower, (int)scaleUpper, 800, 80,
+                volumeIncrementer = new ActionIncrementer(655, (int)scaleLower, (int)scaleUpper, 800, 80,
                     v => SetVolume((ushort)v),
-                    () => _lastVolumeSent);
+                    () => lastVolumeSent);
             }
 
             MuteFeedback = new BoolFeedback(() => IsMuted);
-            VolumeLevelFeedback = new IntFeedback(() => _volumeLevelForSig);
+            VolumeLevelFeedback = new IntFeedback(() => volumeLevelForSig);
             VideoMuteIsOn = new BoolFeedback(() => VideoIsMuted);
 
             AddRoutingInputPort(
@@ -549,14 +549,14 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 new RoutingInputPort(RoutingPortNames.DisplayPortIn, eRoutingSignalType.Audio | eRoutingSignalType.Video,
                     eRoutingPortConnectionType.DisplayPort, new Action(InputDisplayPort1), this), "c0");
 
-            _inputFeedback = new List<bool>(new bool[InputPorts.Count + 1]);
+            inputFeedback = new List<bool>(new bool[InputPorts.Count + 1]);
 
             // Initialize InputFeedback with a BoolFeedback for each input
             InputFeedback = new List<BoolFeedback>();
             for (int i = 0; i < InputPorts.Count; i++)
             {
                 int index = i + 1; // 1-based index to match InputNumber logic
-                InputFeedback.Add(new BoolFeedback(() => _inputFeedback[index]));
+                InputFeedback.Add(new BoolFeedback(() => inputFeedback[index]));
             }
 
             SetupInputs();
@@ -566,7 +566,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             Communication.Connect();
 
-            if (_isSerialComm || _overrideWol)
+            if (isSerialComm || overrideWol)
             {
                 CommunicationMonitor.Start();
             }
@@ -587,7 +587,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     { "c0", new LgInput("c0", "DisplayPort", this) },
                 }
             };
-            ApplyFriendlyNames(_config);
+            ApplyFriendlyNames(config);
         }
         private void ApplyFriendlyNames(LgDisplayPropertiesConfig config)
         {
@@ -620,7 +620,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         private void PortGather_LineReceived(object sender, GenericCommMethodReceiveTextArgs args)
         {
-            ReceiveQueue.Enqueue(new ProcessStringMessage(args.Text, ProcessResponse));
+            receiveQueue.Enqueue(new ProcessStringMessage(args.Text, ProcessResponse));
         }
 
         private void PollAfterNgResponse(string ngCommand)
@@ -757,12 +757,12 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             var commandPrefix = s.Length >= 2 ? s.Substring(0, 2) : string.Empty;
 
-            if (_lastCommandPrefix == "kf" && commandPrefix != "kf")
+            if (lastCommandPrefix == "kf" && commandPrefix != "kf")
             {
                 CrestronEnvironment.Sleep(100);
             }
 
-            _lastCommandPrefix = commandPrefix;
+            lastCommandPrefix = commandPrefix;
 
             Communication.SendText(s + "\x0D");
         }
@@ -897,7 +897,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
             this.LogVerbose("ExecuteSwitch: preparing to execute {0}", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
 
-            _inputSwitchPending = true;
+            inputSwitchPending = true;
 
             if (PowerIsOn)
             {
@@ -907,7 +907,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 }
                 finally
                 {
-                    _inputSwitchPending = false;
+                    inputSwitchPending = false;
                 }
             }
             else if (IsCoolingDown)
@@ -929,7 +929,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     }
                     finally
                     {
-                        _inputSwitchPending = false;
+                        inputSwitchPending = false;
                     }
                 });
             }
@@ -948,7 +948,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     }
                     finally
                     {
-                        _inputSwitchPending = false;
+                        inputSwitchPending = false;
                     }
                 });
             }
@@ -1001,9 +1001,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         private void SendPowerOn()
         {
-            if (_isSerialComm || _overrideWol)
+            if (isSerialComm || overrideWol)
             {
-                SendData(string.Format("ka {0} {1}", Id, _smallDisplay ? "1" : "01"));
+                SendData(string.Format("ka {0} {1}", Id, smallDisplay ? "1" : "01"));
             }
 
             IsCoolingDown = false;
@@ -1012,7 +1012,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         private void SendPowerOff()
         {
-            SendData(string.Format("ka {0} {1}", Id, _smallDisplay ? "0" : "00"));
+            SendData(string.Format("ka {0} {1}", Id, smallDisplay ? "0" : "00"));
 
             IsWarmingUp = false;
             IsCoolingDown = true;
@@ -1051,9 +1051,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             var normalizedInput = s.ToLower();
 
             var newInput = InputPorts.FirstOrDefault(i => i.FeedbackMatchObject.Equals(normalizedInput));
-            if (newInput != null && newInput != _currentInputPort)
+            if (newInput != null && newInput != currentInputPort)
             {
-                _currentInputPort = newInput;
+                currentInputPort = newInput;
                 CurrentInputFeedback.FireUpdate();
                 InputNumber = InputPorts.ToList().IndexOf(newInput) + 1;
             }
@@ -1120,18 +1120,18 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 }
                 else
                 {
-                    newVol = (ushort)NumericalHelpers.Scale(Convert.ToDouble(vol), _lowerLimit, _upperLimit, 0, 65535);
+                    newVol = (ushort)NumericalHelpers.Scale(Convert.ToDouble(vol), lowerLimit, upperLimit, 0, 65535);
                 }
-                if (!_volumeIsRamping)
+                if (!volumeIsRamping)
                 {
-                    _lastVolumeSent = newVol;
+                    lastVolumeSent = newVol;
                 }
 
-                if (newVol == _volumeLevelForSig)
+                if (newVol == volumeLevelForSig)
                 {
                     return;
                 }
-                _volumeLevelForSig = newVol;
+                volumeLevelForSig = newVol;
                 VolumeLevelFeedback.FireUpdate();
             }
             catch (Exception e)
@@ -1173,23 +1173,23 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             try
             {
-                if (data < 0 || data >= _inputFeedback.Count)
+                if (data < 0 || data >= inputFeedback.Count)
                 {
-                    Debug.LogVerbose(this, "Input index {0} out of range for _inputFeedback (size {1})", data, _inputFeedback.Count);
+                    Debug.LogVerbose(this, "Input index {0} out of range for _inputFeedback (size {1})", data, inputFeedback.Count);
                     return;
                 }
 
-                if (_inputFeedback[data])
+                if (inputFeedback[data])
                 {
                     return;
                 }
 
                 for (var i = 1; i < InputPorts.Count + 1; i++)
                 {
-                    _inputFeedback[i] = false;
+                    inputFeedback[i] = false;
                 }
 
-                _inputFeedback[data] = true;
+                inputFeedback[data] = true;
                 foreach (var item in InputFeedback)
                 {
                     var update = item;
