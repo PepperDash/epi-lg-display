@@ -34,6 +34,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         private bool _isMuted;
         private bool _isSerialComm;
         private bool _isWarmingUp;
+        private bool _inputSwitchPending;
         private string _lastCommandPrefix;
         private int _lastVolumeSent;
         private bool _powerIsOn;
@@ -110,7 +111,15 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
                 if (_isWarmingUp)
                 {
-                    WarmupTimer = new CTimer(o => { IsWarmingUp = false; }, WarmupTime);
+                    WarmupTimer = new CTimer(o =>
+                    {
+                        IsWarmingUp = false;
+
+                        if (!_inputSwitchPending)
+                        {
+                            InputGet();
+                        }
+                    }, WarmupTime);
                 }
                 else if (WarmupTimer != null)
                 {
@@ -892,9 +901,12 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
             this.LogVerbose("ExecuteSwitch: preparing to execute {0}", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
 
+            _inputSwitchPending = true;
+
             if (PowerIsOn)
             {
                 action();
+                _inputSwitchPending = false;
             }
             else if (IsCoolingDown)
             {
@@ -910,6 +922,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
                     this.LogVerbose("ExecuteSwitch: Warmup complete. Executing {0}.", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
                     action();
+                    _inputSwitchPending = false;
                 });
             }
             else
@@ -922,6 +935,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
                     this.LogVerbose("ExecuteSwitch: Warmup complete. Executing {0}.", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
                     action();
+                    _inputSwitchPending = false;
                 });
             }
         }
