@@ -901,24 +901,36 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
             if (PowerIsOn)
             {
-                action();
-                _inputSwitchPending = false;
+                try
+                {
+                    action();
+                }
+                finally
+                {
+                    _inputSwitchPending = false;
+                }
             }
             else if (IsCoolingDown)
             {
                 this.LogVerbose("ExecuteSwitch: Device is cooling down. Powering on and executing {0} after cooldown.", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
                 CrestronInvoke.BeginInvoke((o) =>
                 {
-                    CrestronEnvironment.Sleep((int)CooldownTime);
+                    try
+                    {
+                        CrestronEnvironment.Sleep((int)CooldownTime);
 
-                    this.LogVerbose("ExecuteSwitch: Cooldown complete. Powering on.");
-                    PowerOn();
+                        this.LogVerbose("ExecuteSwitch: Cooldown complete. Powering on.");
+                        PowerOn();
 
-                    CrestronEnvironment.Sleep((int)WarmupTime + 1000); // warmup time + 1000 for input switching delay                    
+                        CrestronEnvironment.Sleep((int)WarmupTime + 1000); // warmup time + 1000 for input switching delay                    
 
-                    this.LogVerbose("ExecuteSwitch: Warmup complete. Executing {0}.", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
-                    action();
-                    _inputSwitchPending = false;
+                        this.LogVerbose("ExecuteSwitch: Warmup complete. Executing {0}.", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
+                        action();
+                    }
+                    finally
+                    {
+                        _inputSwitchPending = false;
+                    }
                 });
             }
             else
@@ -927,11 +939,17 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 PowerOn();
                 CrestronInvoke.BeginInvoke((o) =>
                 {
-                    CrestronEnvironment.Sleep((int)WarmupTime + 1000); // warmup time + 1000 for input switching delay                    
+                    try
+                    {
+                        CrestronEnvironment.Sleep((int)WarmupTime + 1000); // warmup time + 1000 for input switching delay                    
 
-                    this.LogVerbose("ExecuteSwitch: Warmup complete. Executing {0}.", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
-                    action();
-                    _inputSwitchPending = false;
+                        this.LogVerbose("ExecuteSwitch: Warmup complete. Executing {0}.", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
+                        action();
+                    }
+                    finally
+                    {
+                        _inputSwitchPending = false;
+                    }
                 });
             }
         }
