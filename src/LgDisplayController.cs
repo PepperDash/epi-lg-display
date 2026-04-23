@@ -22,7 +22,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         IInputHdmi1, IInputHdmi2, IInputHdmi3, IInputHdmi4, IInputDisplayPort1, IBridgeAdvanced, IHasInputs<string>, IBasicVideoMuteWithFeedback, IWarmingCooling
     {
         GenericQueue receiveQueue;
-        GenericQueue receiveQueue;
         public const int InputPowerOn = 101;
         public const int InputPowerOff = 102;
         public static List<string> InputKeys = new List<string>();
@@ -59,21 +58,20 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             receiveQueue = new GenericQueue(key + "-queue");
 
             this.config = config;
-            var props = config;
-            if (props == null)
+            if (this.config == null)
             {
                 Debug.LogError(this, "Display configuration must be included");
                 return;
             }
-            smallDisplay = props.SmallDisplay;
-            Id = !string.IsNullOrEmpty(props.Id) ? props.Id : "01";
-            upperLimit = props.volumeUpperLimit;
-            lowerLimit = props.volumeLowerLimit;
-            overrideWol = props.OverrideWol;
-            pollIntervalMs = props.pollIntervalMs > 1999 ? props.pollIntervalMs : 10000;
-            coolingTimeMs = props.coolingTimeMs > 0 ? props.coolingTimeMs : 10000;
-            warmingTimeMs = props.warmingTimeMs > 0 ? props.warmingTimeMs : 8000;
-            //UdpSocketKey = props.udpSocketKey;
+            smallDisplay = this.config.SmallDisplay;
+            Id = !string.IsNullOrEmpty(this.config.Id) ? this.config.Id : "01";
+            upperLimit = this.config.volumeUpperLimit;
+            lowerLimit = this.config.volumeLowerLimit;
+            overrideWol = this.config.OverrideWol;
+            pollIntervalMs = this.config.pollIntervalMs > 1999 ? this.config.pollIntervalMs : 10000;
+            coolingTimeMs = this.config.coolingTimeMs > 0 ? this.config.coolingTimeMs : 10000;
+            warmingTimeMs = this.config.warmingTimeMs > 0 ? this.config.warmingTimeMs : 8000;
+            //UdpSocketKey = this.config.udpSocketKey;
 
             InputNumberFeedback = new IntFeedback(() =>
             {
@@ -579,11 +577,11 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         private void SetupInputs()
         {
-            if (_config.ActiveInputs != null && _config.ActiveInputs.Count > 0)
+            if (this.config.ActiveInputs != null && this.config.ActiveInputs.Count > 0)
             {
                 Inputs = new LgInputs { Items = new Dictionary<string, ISelectableItem>() };
 
-                var activeInputsMap = _config.ActiveInputs
+                var activeInputsMap = this.config.ActiveInputs
                     .Where(ai => !string.IsNullOrEmpty(ai.Key))
                     .GroupBy(ai => ai.Key, StringComparer.OrdinalIgnoreCase)
                     .ToDictionary(
@@ -750,15 +748,15 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 };
             }
 
-            ApplyFriendlyNames(_config);
+            ApplyFriendlyNames();
 
         }
-        private void ApplyFriendlyNames(LgDisplayPropertiesConfig config)
+        private void ApplyFriendlyNames()
         {
-            if (config?.FriendlyNames == null || Inputs == null || Inputs.Items == null)
+            if (this.config?.FriendlyNames == null || Inputs == null || Inputs.Items == null)
                 return;
 
-            foreach (var friendly in config.FriendlyNames)
+            foreach (var friendly in this.config.FriendlyNames)
             {
                 if (!string.IsNullOrEmpty(friendly.InputKey) && !string.IsNullOrEmpty(friendly.Name))
                 {
