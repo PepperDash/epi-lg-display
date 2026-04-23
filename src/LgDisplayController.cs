@@ -585,12 +585,12 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     .Where(ai => !string.IsNullOrEmpty(ai.Key))
                     .GroupBy(ai => ai.Key, StringComparer.OrdinalIgnoreCase)
                     .ToDictionary(
-                        g => g.Key.ToLower(),
+                        g => g.Key,
                         g => g.Last().Name,
                         StringComparer.OrdinalIgnoreCase
                     );
 
-                var allInputs = new Dictionary<string, KeyValuePair<string, LgInput>>
+                var allInputs = new Dictionary<string, KeyValuePair<string, LgInput>>(StringComparer.OrdinalIgnoreCase)
                 {
                     {
                         "hdmi1",
