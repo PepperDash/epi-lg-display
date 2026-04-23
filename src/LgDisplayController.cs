@@ -577,17 +577,89 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         private void SetupInputs()
         {
-            Inputs = new LgInputs
+            var defaultInputs = new Dictionary<string, ISelectableItem>
             {
-                Items = new Dictionary<string, ISelectableItem>
-                {
-                    { "90", new LgInput("90", "HDMI 1", this) },
-                    { "91", new LgInput("91", "HDMI 2", this) },
-                    { "92", new LgInput("92", "HDMI 3", this) },
-                    { "93", new LgInput("93", "HDMI 4", this) },
-                    { "c0", new LgInput("c0", "DisplayPort", this) },
-                }
+                { "90", new LgInput("90", "HDMI 1", this) },
+                { "91", new LgInput("91", "HDMI 2", this) },
+                { "92", new LgInput("92", "HDMI 3", this) },
+                { "93", new LgInput("93", "HDMI 4", this) },
+                { "c0", new LgInput("c0", "DisplayPort", this) },
             };
+
+            if (config.ActiveInputs != null && config.ActiveInputs.Count > 0)
+            {
+                Inputs = new LgInputs { Items = new Dictionary<string, ISelectableItem>() };
+
+                var activeInputsMap = config.ActiveInputs
+                    .Where(ai => !string.IsNullOrEmpty(ai.Key))
+                    .GroupBy(ai => ai.Key, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(
+                        g => g.Key.ToLowerInvariant(),
+                        g => g.Last().Name,
+                        StringComparer.OrdinalIgnoreCase
+                    );
+
+                var inputAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    { "hdmi1", "90" },
+                    { "hdmiin1", "90" },
+                    { "90", "90" },
+                    { "hdmi2", "91" },
+                    { "hdmiin2", "91" },
+                    { "91", "91" },
+                    { "hdmi3", "92" },
+                    { "hdmiin3", "92" },
+                    { "92", "92" },
+                    { "hdmi4", "93" },
+                    { "hdmiin4", "93" },
+                    { "93", "93" },
+                    { "displayport", "c0" },
+                    { "displayport1", "c0" },
+                    { "displayportin1", "c0" },
+                    { "c0", "c0" },
+                };
+
+                foreach (var activeInput in activeInputsMap)
+                {
+                    if (!inputAliases.TryGetValue(activeInput.Key, out var inputCode))
+                    {
+                        continue;
+                    }
+
+                    if (!defaultInputs.TryGetValue(inputCode, out var input))
+                    {
+                        continue;
+                    }
+
+                    var lgInput = input as LgInput;
+                    if (lgInput == null)
+                    {
+                        continue;
+                    }
+
+                    Inputs.Items[lgInput.Key] = new LgInput(
+                        lgInput.Key,
+                        string.IsNullOrEmpty(activeInput.Value) ? lgInput.Name : activeInput.Value,
+                        this
+                    );
+                }
+
+                if (Inputs.Items.Count == 0)
+                {
+                    Inputs = new LgInputs
+                    {
+                        Items = new Dictionary<string, ISelectableItem>(defaultInputs)
+                    };
+                }
+            }
+            else
+            {
+                Inputs = new LgInputs
+                {
+                    Items = defaultInputs
+                };
+            }
+
             ApplyFriendlyNames(config);
         }
         private void ApplyFriendlyNames(LgDisplayPropertiesConfig config)
@@ -1071,9 +1143,10 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// <param name="s">response from device</param>
         public void UpdateInputFb(string s)
         {
-            var normalizedInput = s.ToLower();
+            var deviceInput = s ?? string.Empty;
 
-            var newInput = InputPorts.FirstOrDefault(i => i.FeedbackMatchObject.Equals(normalizedInput));
+            var newInput = InputPorts.FirstOrDefault(
+                i => string.Equals(i.FeedbackMatchObject as string, deviceInput, StringComparison.OrdinalIgnoreCase));
             if (newInput != null && newInput != currentInputPort)
             {
                 currentInputPort = newInput;
@@ -1081,14 +1154,23 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 InputNumber = InputPorts.ToList().IndexOf(newInput) + 1;
             }
 
-            if (Inputs.Items.ContainsKey(normalizedInput))
+            var matchingInputKey = Inputs != null && Inputs.Items != null
+                ? Inputs.Items.Keys.FirstOrDefault(k => k.Equals(deviceInput, StringComparison.OrdinalIgnoreCase))
+                : null;
+
+            var hasSelectableInput = !string.IsNullOrEmpty(matchingInputKey);
+
+            if (Inputs != null && Inputs.Items != null)
             {
                 foreach (var item in Inputs.Items)
                 {
-                    item.Value.IsSelected = item.Key.Equals(normalizedInput);
+                    item.Value.IsSelected = hasSelectableInput && item.Key.Equals(matchingInputKey);
                 }
+            }
 
-                Inputs.CurrentItem = normalizedInput;
+            if (Inputs != null)
+            {
+                Inputs.CurrentItem = hasSelectableInput ? matchingInputKey : string.Empty;
             }
         }
 

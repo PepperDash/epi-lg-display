@@ -39,9 +39,13 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         [JsonProperty("friendlyNames")]
         public List<FriendlyName> FriendlyNames { get; set; }
 
+        [JsonProperty("activeInputs")]
+        public List<ActiveInput> ActiveInputs { get; set; }
+
         public LgDisplayPropertiesConfig()
         {
             FriendlyNames = new List<FriendlyName>();
+            ActiveInputs = new List<ActiveInput>();
         }
     }
 
@@ -55,6 +59,21 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         [JsonProperty("hideInput")]
         public bool HideInput { get; set; }
+    }
+
+    public class ActiveInput : IKeyName
+    {
+        [JsonProperty("key")]
+        public string Key { get; set; }
+
+        [JsonProperty("name")]
+        public string Name { get; set; }
+
+        public ActiveInput()
+        {
+            Key = string.Empty;
+            Name = string.Empty;
+        }
     }
 
 }
