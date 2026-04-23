@@ -1143,7 +1143,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// <param name="s">response from device</param>
         public void UpdateInputFb(string s)
         {
-            var normalizedInput = s.ToLower();
+            var normalizedInput = (s ?? string.Empty).ToLowerInvariant();
 
             var newInput = InputPorts.FirstOrDefault(i => i.FeedbackMatchObject.Equals(normalizedInput));
             if (newInput != null && newInput != currentInputPort)
@@ -1153,14 +1153,21 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 InputNumber = InputPorts.ToList().IndexOf(newInput) + 1;
             }
 
-            if (Inputs.Items.ContainsKey(normalizedInput))
+            var hasSelectableInput = Inputs != null
+                && Inputs.Items != null
+                && Inputs.Items.ContainsKey(normalizedInput);
+
+            if (Inputs != null && Inputs.Items != null)
             {
                 foreach (var item in Inputs.Items)
                 {
-                    item.Value.IsSelected = item.Key.Equals(normalizedInput);
+                    item.Value.IsSelected = hasSelectableInput && item.Key.Equals(normalizedInput, StringComparison.OrdinalIgnoreCase);
                 }
+            }
 
-                Inputs.CurrentItem = normalizedInput;
+            if (Inputs != null)
+            {
+                Inputs.CurrentItem = hasSelectableInput ? normalizedInput : string.Empty;
             }
         }
 
