@@ -783,7 +783,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         private void PortGather_LineReceived(object sender, GenericCommMethodReceiveTextArgs args)
         {
             receiveQueue.Enqueue(new ProcessStringMessage(args.Text, ProcessResponse));
-            receiveQueue.Enqueue(new ProcessStringMessage(args.Text, ProcessResponse));
         }
 
         private void PollAfterNgResponse(string ngCommand)
