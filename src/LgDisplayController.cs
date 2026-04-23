@@ -1143,9 +1143,10 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// <param name="s">response from device</param>
         public void UpdateInputFb(string s)
         {
-            var normalizedInput = (s ?? string.Empty).ToLowerInvariant();
+            var deviceInput = s ?? string.Empty;
 
-            var newInput = InputPorts.FirstOrDefault(i => i.FeedbackMatchObject.Equals(normalizedInput));
+            var newInput = InputPorts.FirstOrDefault(
+                i => string.Equals(i.FeedbackMatchObject as string, deviceInput, StringComparison.OrdinalIgnoreCase));
             if (newInput != null && newInput != currentInputPort)
             {
                 currentInputPort = newInput;
@@ -1153,21 +1154,23 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 InputNumber = InputPorts.ToList().IndexOf(newInput) + 1;
             }
 
-            var hasSelectableInput = Inputs != null
-                && Inputs.Items != null
-                && Inputs.Items.ContainsKey(normalizedInput);
+            var matchingInputKey = Inputs != null && Inputs.Items != null
+                ? Inputs.Items.Keys.FirstOrDefault(k => k.Equals(deviceInput, StringComparison.OrdinalIgnoreCase))
+                : null;
+
+            var hasSelectableInput = !string.IsNullOrEmpty(matchingInputKey);
 
             if (Inputs != null && Inputs.Items != null)
             {
                 foreach (var item in Inputs.Items)
                 {
-                    item.Value.IsSelected = hasSelectableInput && item.Key.Equals(normalizedInput, StringComparison.OrdinalIgnoreCase);
+                    item.Value.IsSelected = hasSelectableInput && item.Key.Equals(matchingInputKey);
                 }
             }
 
             if (Inputs != null)
             {
-                Inputs.CurrentItem = hasSelectableInput ? normalizedInput : string.Empty;
+                Inputs.CurrentItem = hasSelectableInput ? matchingInputKey : string.Empty;
             }
         }
 
