@@ -54,6 +54,34 @@ namespace Epi.Display.Lg
         //        JoinType = eJoinType.Digital
         //    });
 
+        [JoinName("IsCoolingDown")]
+        public JoinDataComplete IsCoolingDown = new JoinDataComplete(
+           new JoinData
+           {
+               JoinNumber = 4,
+               JoinSpan = 1
+           },
+           new JoinMetadata
+           {
+               Description = "Display is Cooling Down",
+               JoinCapabilities = eJoinCapabilities.ToSIMPL,
+               JoinType = eJoinType.Digital
+           });
+
+        [JoinName("IsWarmingUp")]
+        public JoinDataComplete IsWarmingUp = new JoinDataComplete(
+           new JoinData
+           {
+               JoinNumber = 5,
+               JoinSpan = 1
+           },
+           new JoinMetadata
+           {
+               Description = "Display is Warming Up",
+               JoinCapabilities = eJoinCapabilities.ToSIMPL,
+               JoinType = eJoinType.Digital
+           });
+
         //[JoinName("InputSelectOffset")]
         //public JoinDataComplete InputSelectOffset = new JoinDataComplete(
         //    new JoinData
