@@ -38,23 +38,9 @@ This repo contains a plugin for use with [PepperDash Essentials](https://github.
         "stopBits": 1
       }
     },
-    "activeInputs": [                       //optional: only expose these inputs in the plugin
-        {
-        	"key": "hdmiIn1",
-        	"name": "HDMI 1"
-        },
-        {
-        	"key": "hdmiIn2",
-        	"name": "HDMI 2"
-        },
-        {
-        	"key": "displayPortIn1",
-        	"name": "DisplayPort"
-        }
-        ],
-    "friendlyNames": [                      //optional: rename/hide configured inputs
+    "friendlyNames": [                      //if you want to use friendly names, add this section
 	        {
-          	"inputKey": "90",           //input key to rename/hide (for example: 90, 91, 92, 93, c0)
+	        	"inputKey": "90",           //The input key for the input you want to use a friendly name for, this has to be a valid input key(90,91,c0)
 	        	"name": "Friendly Name 1",  //The desired name to be displayed on the screen
             "hideInput": false              //if set to true, the input will not be displayed in the list of inputs
 	        },
@@ -70,6 +56,15 @@ This repo contains a plugin for use with [PepperDash Essentials](https://github.
 
 	        }
         ],
+    "activeInputs": [                       //optional: only expose these inputs in plugin selectable inputs
+      {
+        "key": "hdmi1",                     //supports aliases like hdmi1/hdmiin1/90
+        "name": "Cable Box"                 //optional override name
+      },
+      {
+        "key": "c0"                         //displayport (displayport/displayport1/displayportin1/c0)
+      }
+    ],
   }
 
 }
@@ -81,7 +76,7 @@ For more configuration information, see the [PepperDash Essentials wiki](https:/
 
 ## GitHub Actions
 
-This repo contains two GitHub Actions workflows that will build this project automatically. Modify the SOLUTION_PATH and SOLUTION_FILE environment variables as needed. Any branches named `feature/*`, `release/*`, `hotfix/*` or `development` will automatically be built with the action and create a release in the repository with a version number based on the latest release on the master branch. If there are no releases yet, the version number will be 0.0.1. The version number will be modified based on what branch triggered the build:
+This repo contains two GitHub Action workflows that will build this project automatically. Modify the SOLUTION_PATH and SOLUTION_FILE environment variables as needed. Any branches named `feature/*`, `release/*`, `hotfix/*` or `development` will automatically be built with the action and create a release in the repository with a version number based on the latest release on the master branch. If there are no releases yet, the version number will be 0.0.1. The version number will be modified based on what branch triggered the build:
 
 - `feature` branch builds will be tagged with an `alpha` descriptor, with the Action run appended: `0.0.1-alpha-1`
 - `development` branch builds will be tagged with a `beta` descriptor, with the Action run appended: `0.0.1-beta-2`

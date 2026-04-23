@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -57,20 +57,21 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             receiveQueue = new GenericQueue(key + "-queue");
 
             this.config = config;
-            if (this.config == null)
+            var props = config;
+            if (props == null)
             {
                 Debug.LogError(this, "Display configuration must be included");
                 return;
             }
-            smallDisplay = this.config.SmallDisplay;
-            Id = !string.IsNullOrEmpty(this.config.Id) ? this.config.Id : "01";
-            upperLimit = this.config.volumeUpperLimit;
-            lowerLimit = this.config.volumeLowerLimit;
-            overrideWol = this.config.OverrideWol;
-            pollIntervalMs = this.config.pollIntervalMs > 1999 ? this.config.pollIntervalMs : 10000;
-            coolingTimeMs = this.config.coolingTimeMs > 0 ? this.config.coolingTimeMs : 10000;
-            warmingTimeMs = this.config.warmingTimeMs > 0 ? this.config.warmingTimeMs : 8000;
-            //UdpSocketKey = this.config.udpSocketKey;
+            smallDisplay = props.SmallDisplay;
+            Id = !string.IsNullOrEmpty(props.Id) ? props.Id : "01";
+            upperLimit = props.volumeUpperLimit;
+            lowerLimit = props.volumeLowerLimit;
+            overrideWol = props.OverrideWol;
+            pollIntervalMs = props.pollIntervalMs > 1999 ? props.pollIntervalMs : 10000;
+            coolingTimeMs = props.coolingTimeMs > 0 ? props.coolingTimeMs : 10000;
+            warmingTimeMs = props.warmingTimeMs > 0 ? props.warmingTimeMs : 8000;
+            //UdpSocketKey = props.udpSocketKey;
 
             InputNumberFeedback = new IntFeedback(() =>
             {
@@ -576,159 +577,78 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         private void SetupInputs()
         {
-            if (this.config.ActiveInputs != null && this.config.ActiveInputs.Count > 0)
+            var defaultInputs = new Dictionary<string, ISelectableItem>
+            {
+                { "90", new LgInput("90", "HDMI 1", this) },
+                { "91", new LgInput("91", "HDMI 2", this) },
+                { "92", new LgInput("92", "HDMI 3", this) },
+                { "93", new LgInput("93", "HDMI 4", this) },
+                { "c0", new LgInput("c0", "DisplayPort", this) },
+            };
+
+            if (config.ActiveInputs != null && config.ActiveInputs.Count > 0)
             {
                 Inputs = new LgInputs { Items = new Dictionary<string, ISelectableItem>() };
 
-                var activeInputsMap = this.config.ActiveInputs
+                var activeInputsMap = config.ActiveInputs
                     .Where(ai => !string.IsNullOrEmpty(ai.Key))
                     .GroupBy(ai => ai.Key, StringComparer.OrdinalIgnoreCase)
                     .ToDictionary(
-                        g => g.Key,
+                        g => g.Key.ToLowerInvariant(),
                         g => g.Last().Name,
                         StringComparer.OrdinalIgnoreCase
                     );
 
-                var allInputs = new Dictionary<string, KeyValuePair<string, LgInput>>(StringComparer.OrdinalIgnoreCase)
+                var inputAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    {
-                        "hdmi1",
-                        new KeyValuePair<string, LgInput>(
-                            "90",
-                            new LgInput("90", "HDMI 1", this)
-                        )
-                    },
-                    {
-                        "hdmiin1",
-                        new KeyValuePair<string, LgInput>(
-                            "90",
-                            new LgInput("90", "HDMI 1", this)
-                        )
-                    },
-                    {
-                        "90",
-                        new KeyValuePair<string, LgInput>(
-                            "90",
-                            new LgInput("90", "HDMI 1", this)
-                        )
-                    },
-                    {
-                        "hdmi2",
-                        new KeyValuePair<string, LgInput>(
-                            "91",
-                            new LgInput("91", "HDMI 2", this)
-                        )
-                    },
-                    {
-                        "hdmiin2",
-                        new KeyValuePair<string, LgInput>(
-                            "91",
-                            new LgInput("91", "HDMI 2", this)
-                        )
-                    },
-                    {
-                        "91",
-                        new KeyValuePair<string, LgInput>(
-                            "91",
-                            new LgInput("91", "HDMI 2", this)
-                        )
-                    },
-                    {
-                        "hdmi3",
-                        new KeyValuePair<string, LgInput>(
-                            "92",
-                            new LgInput("92", "HDMI 3", this)
-                        )
-                    },
-                    {
-                        "hdmiin3",
-                        new KeyValuePair<string, LgInput>(
-                            "92",
-                            new LgInput("92", "HDMI 3", this)
-                        )
-                    },
-                    {
-                        "92",
-                        new KeyValuePair<string, LgInput>(
-                            "92",
-                            new LgInput("92", "HDMI 3", this)
-                        )
-                    },
-                    {
-                        "hdmi4",
-                        new KeyValuePair<string, LgInput>(
-                            "93",
-                            new LgInput("93", "HDMI 4", this)
-                        )
-                    },
-                    {
-                        "hdmiin4",
-                        new KeyValuePair<string, LgInput>(
-                            "93",
-                            new LgInput("93", "HDMI 4", this)
-                        )
-                    },
-                    {
-                        "93",
-                        new KeyValuePair<string, LgInput>(
-                            "93",
-                            new LgInput("93", "HDMI 4", this)
-                        )
-                    },
-                    {
-                        "displayport",
-                        new KeyValuePair<string, LgInput>(
-                            "c0",
-                            new LgInput("c0", "DisplayPort", this)
-                        )
-                    },
-                    {
-                        "displayport1",
-                        new KeyValuePair<string, LgInput>(
-                            "c0",
-                            new LgInput("c0", "DisplayPort", this)
-                        )
-                    },
-                    {
-                        "displayportin1",
-                        new KeyValuePair<string, LgInput>(
-                            "c0",
-                            new LgInput("c0", "DisplayPort", this)
-                        )
-                    },
-                    {
-                        "c0",
-                        new KeyValuePair<string, LgInput>(
-                            "c0",
-                            new LgInput("c0", "DisplayPort", this)
-                        )
-                    },
+                    { "hdmi1", "90" },
+                    { "hdmiin1", "90" },
+                    { "90", "90" },
+                    { "hdmi2", "91" },
+                    { "hdmiin2", "91" },
+                    { "91", "91" },
+                    { "hdmi3", "92" },
+                    { "hdmiin3", "92" },
+                    { "92", "92" },
+                    { "hdmi4", "93" },
+                    { "hdmiin4", "93" },
+                    { "93", "93" },
+                    { "displayport", "c0" },
+                    { "displayport1", "c0" },
+                    { "displayportin1", "c0" },
+                    { "c0", "c0" },
                 };
 
                 foreach (var activeInput in activeInputsMap)
                 {
-                    if (allInputs.TryGetValue(activeInput.Key, out var input))
+                    if (!inputAliases.TryGetValue(activeInput.Key, out var inputCode))
                     {
-                        Inputs.Items[input.Key] = new LgInput(
-                            input.Value.Key,
-                            string.IsNullOrEmpty(activeInput.Value) ? input.Value.Name : activeInput.Value,
-                            this
-                        );
+                        continue;
                     }
+
+                    if (!defaultInputs.TryGetValue(inputCode, out var input))
+                    {
+                        continue;
+                    }
+
+                    var lgInput = input as LgInput;
+                    if (lgInput == null)
+                    {
+                        continue;
+                    }
+
+                    Inputs.Items[lgInput.Key] = new LgInput(
+                        lgInput.Key,
+                        string.IsNullOrEmpty(activeInput.Value) ? lgInput.Name : activeInput.Value,
+                        this
+                    );
                 }
 
                 if (Inputs.Items.Count == 0)
                 {
                     Inputs = new LgInputs
                     {
-                        Items = new Dictionary<string, ISelectableItem>
-                        {
-                            { "90", new LgInput("90", "HDMI 1", this) },
-                            { "91", new LgInput("91", "HDMI 2", this) },
-                            { "92", new LgInput("92", "HDMI 3", this) },
-                            { "93", new LgInput("93", "HDMI 4", this) },
-                            { "c0", new LgInput("c0", "DisplayPort", this) },
-                        }
+                        Items = new Dictionary<string, ISelectableItem>(defaultInputs)
                     };
                 }
             }
@@ -736,26 +656,18 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             {
                 Inputs = new LgInputs
                 {
-                    Items = new Dictionary<string, ISelectableItem>
-                    {
-                        { "90", new LgInput("90", "HDMI 1", this) },
-                        { "91", new LgInput("91", "HDMI 2", this) },
-                        { "92", new LgInput("92", "HDMI 3", this) },
-                        { "93", new LgInput("93", "HDMI 4", this) },
-                        { "c0", new LgInput("c0", "DisplayPort", this) },
-                    }
+                    Items = defaultInputs
                 };
             }
 
-            ApplyFriendlyNames();
-
+            ApplyFriendlyNames(config);
         }
-        private void ApplyFriendlyNames()
+        private void ApplyFriendlyNames(LgDisplayPropertiesConfig config)
         {
-            if (this.config?.FriendlyNames == null || Inputs == null || Inputs.Items == null)
+            if (config?.FriendlyNames == null || Inputs == null || Inputs.Items == null)
                 return;
 
-            foreach (var friendly in this.config.FriendlyNames)
+            foreach (var friendly in config.FriendlyNames)
             {
                 if (!string.IsNullOrEmpty(friendly.InputKey) && !string.IsNullOrEmpty(friendly.Name))
                 {
@@ -1241,15 +1153,15 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 InputNumber = InputPorts.ToList().IndexOf(newInput) + 1;
             }
 
-            if (Inputs.Items.ContainsKey(s.ToLowerInvariant()))
+            if (Inputs.Items.ContainsKey(normalizedInput))
             {
                 foreach (var item in Inputs.Items)
                 {
-                    item.Value.IsSelected = item.Key.Equals(s.ToLowerInvariant());
+                    item.Value.IsSelected = item.Key.Equals(normalizedInput);
                 }
-            }
 
-            Inputs.CurrentItem = s.ToLowerInvariant();
+                Inputs.CurrentItem = normalizedInput;
+            }
         }
 
         /// <summary>
