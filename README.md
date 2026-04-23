@@ -79,9 +79,9 @@ The `smallDisplay` configuration option is used to control padding of the power 
 
 For more configuration information, see the [PepperDash Essentials wiki](https://github.com/PepperDash/Essentials/wiki).
 
-## Github Actions
+## GitHub Actions
 
-This repo contains two Github Action workflows that will build this project automatically. Modify the SOLUTION_PATH and SOLUTION_FILE environment variables as needed. Any branches named `feature/*`, `release/*`, `hotfix/*` or `development` will automatically be built with the action and create a release in the repository with a version number based on the latest release on the master branch. If there are no releases yet, the version number will be 0.0.1. The version number will be modified based on what branch triggered the build:
+This repo contains two GitHub Actions workflows that will build this project automatically. Modify the SOLUTION_PATH and SOLUTION_FILE environment variables as needed. Any branches named `feature/*`, `release/*`, `hotfix/*` or `development` will automatically be built with the action and create a release in the repository with a version number based on the latest release on the master branch. If there are no releases yet, the version number will be 0.0.1. The version number will be modified based on what branch triggered the build:
 
 - `feature` branch builds will be tagged with an `alpha` descriptor, with the Action run appended: `0.0.1-alpha-1`
 - `development` branch builds will be tagged with a `beta` descriptor, with the Action run appended: `0.0.1-beta-2`
