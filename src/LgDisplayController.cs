@@ -55,7 +55,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             Communication = comms;
 
             receiveQueue = new GenericQueue(key + "-queue");
-            receiveQueue = new GenericQueue(key + "-queue");
 
             this.config = config;
             if (this.config == null)
