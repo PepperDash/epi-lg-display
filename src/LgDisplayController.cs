@@ -12,14 +12,13 @@ using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges;
 using PepperDash.Essentials.Core.DeviceTypeInterfaces;
 using PepperDash.Essentials.Core.Queues;
-using PepperDash.Essentials.Devices.Displays;
 using TwoWayDisplayBase = PepperDash.Essentials.Devices.Common.Displays.TwoWayDisplayBase;
 
 
 namespace PepperDash.Essentials.Plugins.Lg.Display
 {
     public class LgDisplayController : TwoWayDisplayBase, IBasicVolumeWithFeedback, ICommunicationMonitor,
-        IInputHdmi1, IInputHdmi2, IInputHdmi3, IInputHdmi4, IInputDisplayPort1, IBridgeAdvanced, IHasInputs<string>, IBasicVideoMuteWithFeedback, IWarmingCooling
+        IBridgeAdvanced, IHasInputs<string>, IBasicVideoMuteWithFeedback, IWarmingCooling
     {
         GenericQueue receiveQueue;
         public const int InputPowerOn = 101;
@@ -60,7 +59,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             var props = config;
             if (props == null)
             {
-                Debug.LogError(this, "Display configuration must be included");
+                this.LogError("Display configuration must be included");
                 return;
             }
             smallDisplay = props.SmallDisplay;
@@ -112,7 +111,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
                 if (isWarmingUp)
                 {
-                    WarmupTimer = new CTimer(o =>
+                    WarmupTimer = new System.Timers.Timer(WarmupTime) { AutoReset = false };
+                    WarmupTimer.Elapsed += (s, e) =>
                     {
                         IsWarmingUp = false;
 
@@ -120,7 +120,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                         {
                             InputGet();
                         }
-                    }, WarmupTime);
+                    };
+                    WarmupTimer.Start();
                 }
                 else if (WarmupTimer != null)
                 {
@@ -144,7 +145,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
                 if (isCoolingDown)
                 {
-                    CooldownTimer = new CTimer(o => { IsCoolingDown = false; }, CooldownTime);
+                    CooldownTimer = new System.Timers.Timer(CooldownTime) { AutoReset = false };
+                    CooldownTimer.Elapsed += (s, e) => { IsCoolingDown = false; };
+                    CooldownTimer.Start();
                 }
                 else if (CooldownTimer != null)
                 {
@@ -379,8 +382,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 joinMap.SetCustomJoinData(customJoins);
             }
 
-            Debug.LogInformation(this, "Linking to Trilist '{0}'", trilist.ID.ToString("X"));
-            Debug.LogInformation(this, "Linking to Bridge Type {0}", GetType().Name);
+            this.LogInformation("Linking to Trilist '{TrilistId}'", trilist.ID.ToString("X"));
+            this.LogInformation("Linking to Bridge Type {BridgeType}", GetType().Name);
 
             // links to bridge
             // device name
@@ -442,7 +445,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 InputNumberFeedback.LinkInputSig(trilist.UShortInput[joinMap.InputSelect.JoinNumber]);
 
             if (CurrentInputFeedback != null)
-                CurrentInputFeedback.OutputChange += (sender, args) => Debug.LogDebug(this, "CurrentInputFeedback: {0}", args.StringValue);
+                CurrentInputFeedback.OutputChange += (sender, args) => this.LogDebug("CurrentInputFeedback: {Value}", args.StringValue);
 
             // bridge online change
             trilist.OnlineStatusChange += (sender, args) =>
@@ -499,7 +502,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             if (socket != null)
             {
                 //This Instance Uses IP Control
-                Debug.LogVerbose(this, "The LG Display Plugin does NOT support IP Control currently");
+                this.LogVerbose("The LG Display Plugin does NOT support IP Control currently");
             }
             else
             {
@@ -563,7 +566,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             SetupInputs();
         }
 
-        public override bool CustomActivate()
+        protected override bool CustomActivate()
         {
             Communication.Connect();
 
@@ -738,7 +741,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
             catch (Exception e)
             {
-                Debug.LogError(this, "Failed to normalize device ID '{0}': {1}", deviceId, e.Message);
+                this.LogError("Failed to normalize device ID '{DeviceId}': {Error}", deviceId, e.Message);
                 return deviceId; // Return original if parsing fails
             }
         }
@@ -1123,7 +1126,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
             catch (Exception e)
             {
-                Debug.LogVerbose(this, "Unable to parse {0} to Int32 {1}", s, e);
+                this.LogVerbose("Unable to parse {Value} to Int32 {Error}", s, e);
             }
         }
 
@@ -1159,7 +1162,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
             catch (Exception e)
             {
-                Debug.LogVerbose(this, "Error updating volumefb for value: {1}: {0}", e, s);
+                this.LogVerbose("Error updating volumefb for value: {Value}: {Error}", s, e);
             }
         }
 
@@ -1184,7 +1187,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
             catch (Exception e)
             {
-                Debug.LogVerbose(this, "Unable to parse {0} to Int32 {1}", s, e);
+                this.LogVerbose("Unable to parse {Value} to Int32 {Error}", s, e);
             }
         }
 
@@ -1198,7 +1201,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             {
                 if (data < 0 || data >= inputFeedback.Count)
                 {
-                    Debug.LogVerbose(this, "Input index {0} out of range for _inputFeedback (size {1})", data, inputFeedback.Count);
+                    this.LogVerbose("Input index {Index} out of range for _inputFeedback (size {Size})", data, inputFeedback.Count);
                     return;
                 }
 
@@ -1221,7 +1224,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
             catch (Exception e)
             {
-                Debug.LogError(this, "{0}", e.Message);
+                this.LogError("{Error}", e.Message);
             }
         }
 
@@ -1280,7 +1283,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 return;
             }
 
-            Debug.LogVerbose(this, "Invalid MAC Address sent to WolFunction - {0}", macAddress);
+            this.LogVerbose("Invalid MAC Address sent to WolFunction - {MacAddress}", macAddress);
             throw new ArgumentException("Invalid MAC Address");
         }
     }

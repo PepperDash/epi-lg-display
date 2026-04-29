@@ -2,6 +2,7 @@
 using PepperDash.Core;
 using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Config;
+using Serilog.Events;
 
 namespace PepperDash.Essentials.Plugins.Lg.Display
 {
@@ -11,7 +12,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             TypeNames = new List<string> { "lgDisplayIr" };
 
-            MinimumEssentialsFrameworkVersion = "3.0.0";
+            MinimumEssentialsFrameworkVersion = "3.0.0-dev-v3-testing.13";
         }
 
 
@@ -20,7 +21,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             var irPort = IRPortHelper.GetIrOutputPortController(dc);
             if (irPort == null)
             {
-                Debug.LogError($"No IR Output Port Controller found for device '{dc.Key}'. Cannot create LgDisplayIrController");
+                Debug.LogMessage(LogEventLevel.Error, "No IR Output Port Controller found for device '{Key}'. Cannot create LgDisplayIrController", null, dc.Key);
                 return null;
             }
             var propertiesConfig = dc.Properties.ToObject<LgDisplayPropertiesConfig>();

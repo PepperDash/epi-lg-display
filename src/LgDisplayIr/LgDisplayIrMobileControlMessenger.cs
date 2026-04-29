@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Crestron.SimplSharp;
 using Newtonsoft.Json;
 using PepperDash.Core;
+using PepperDash.Core.Logging;
 using PepperDash.Essentials.AppServer.Messengers;
 
 namespace PepperDash.Essentials.Plugins.Lg.Display
@@ -13,12 +14,12 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 : base(key, messagePath, device)
         {
             this.device = device;
-            Debug.LogInformation("Constructing messenger for {0}", device.Key);
+            this.LogInformation("Constructing messenger for {Key}", device.Key);
         }
 
         protected override void RegisterActions()
         {
-            Debug.LogInformation("Registering actions for {0}", device.Key);
+            this.LogInformation("Registering actions for {Key}", device.Key);
 
             // Register action to send IR command
             // - this is composited with the /device/{device-key} path to handle the correct message. ie, the full path from the frontend is /device/{device-key}/irCommand. The path in the constructor MUST follow the basic pattern defined there
