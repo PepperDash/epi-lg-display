@@ -3,7 +3,7 @@
 		<ProjectType>ProgramLibrary</ProjectType>
 	</PropertyGroup>
 	<PropertyGroup>
-		<TargetFramework>net472</TargetFramework>
+		<TargetFramework>net8</TargetFramework>
 		<RootNamespace>PepperDash.Essentials.Plugins.Lg.Display</RootNamespace>
 		<Deterministic>false</Deterministic>
 		<AssemblyTitle>epi-lg-display</AssemblyTitle>
@@ -17,13 +17,8 @@
 		<Authors>PepperDash Technology</Authors>
 		<PackageId>PepperDash.Essentials.Plugin.LgDisplay</PackageId>
 		<PackageProjectUrl>https://github.com/PepperDash/epi-lg-display</PackageProjectUrl>
-		<PackageTags>crestron 4series lg display</PackageTags>
+		<PackageTags>crestron 4series lg display net8</PackageTags>
 	</PropertyGroup>
-
-	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-		<DefineConstants>$(DefineConstants);SERIES4</DefineConstants>
-	</PropertyGroup>
-
 
 	<ItemGroup>
 		<Compile Remove="Properties\**" />
@@ -37,7 +32,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="PepperDashEssentials" Version="2.5.1">
+		<PackageReference Include="PepperDashEssentials" Version="3.0.0">
 			<ExcludeAssets>runtime</ExcludeAssets>
 		</PackageReference>
 	</ItemGroup>

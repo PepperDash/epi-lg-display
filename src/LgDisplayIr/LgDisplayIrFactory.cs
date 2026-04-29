@@ -11,7 +11,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             TypeNames = new List<string> { "lgDisplayIr" };
 
-            MinimumEssentialsFrameworkVersion = "2.16.0";
+            MinimumEssentialsFrameworkVersion = "3.0.0";
         }
 
 

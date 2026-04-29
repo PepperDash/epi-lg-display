@@ -1,16 +1,16 @@
-﻿using PepperDash.Essentials.Core;
+﻿using System.Collections.Generic;
+using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Config;
-using System.Collections.Generic;
 
 namespace PepperDash.Essentials.Plugins.Lg.Display
 {
-    public class LgDisplayControllerFactory:EssentialsPluginDeviceFactory<LgDisplayController>
+    public class LgDisplayControllerFactory : EssentialsPluginDeviceFactory<LgDisplayController>
     {
         public LgDisplayControllerFactory()
         {
-            TypeNames = new List<string> {"lgDisplay", "lgPlugin", "lg"};
+            TypeNames = new List<string> { "lgDisplay", "lgPlugin", "lg" };
 
-            MinimumEssentialsFrameworkVersion = "1.8.0";
+            MinimumEssentialsFrameworkVersion = "3.0.0";
         }
 
         #region Overrides of EssentialsDeviceFactory<LgDisplayController>
