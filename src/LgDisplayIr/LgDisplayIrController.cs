@@ -12,7 +12,8 @@ using DisplayBase = PepperDash.Essentials.Devices.Common.Displays.DisplayBase;
 
 namespace PepperDash.Essentials.Plugins.Lg.Display
 {
-    public class LgDisplayIrController : DisplayBase, IBasicVolumeControls, IBridgeAdvanced, IHasInputs<string>
+    public class LgDisplayIrController : DisplayBase, IBasicVolumeControls, IBridgeAdvanced, IHasInputs<string>,
+        IDPad, INumericKeypad, ITransport, IChannel, IColor
     {
         private readonly LgDisplayPropertiesConfig propertiesConfig;
 
@@ -73,19 +74,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             WarmupTime = propertiesConfig.warmingTimeMs > 0 ? propertiesConfig.warmingTimeMs : 8000;
         }
 
-
-        // protected override void CreateMobileControlMessengers()
-        // {
-        //     var mc = DeviceManager.AllDevices.OfType<IMobileControl>().FirstOrDefault();
-        //     if (mc == null)
-        //     {
-        //         Debug.LogInformation("Mobile Control not found");
-        //         return;
-        //     }
-
-        //     var messenger = new LgDisplayIrMobileControlMessenger($"{Key}", $"/device/{Key}", this);
-        //     mc.AddDeviceMessenger(messenger);
-        // }
 
 
         #region IBridgeAdvanced Members
@@ -164,10 +152,19 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 return;
             }
 
-            Debug.LogInformation(this, "SendIrCommand: ir command '{0}'", cmd);
+            // Resolved here rather than at each call site: ExecuteSwitch's string branch passes an
+            // Inputs key straight through, and doing it once means no future caller can bypass it.
+            // Resolution is idempotent, so the PowerOn/Menu/dpad paths that already pass standard
+            // commands are unaffected.
+            var resolved = IrStandardCommands.Resolve(cmd);
 
-            irController?.PressRelease(cmd, true);
-            irController?.PressRelease(cmd, false);
+            if (!string.Equals(resolved, cmd, StringComparison.Ordinal))
+                Debug.LogVerbose(this, "SendIrCommand: resolved selector '{0}' to ir command '{1}'", cmd, resolved);
+
+            Debug.LogInformation(this, "SendIrCommand: ir command '{0}'", resolved);
+
+            irController?.PressRelease(resolved, true);
+            irController?.PressRelease(resolved, false);
         }
 
 
@@ -179,8 +176,23 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public override void PowerOn()
         {
+            if (SuppressPower("PowerOn")) return;
+
             Debug.LogInformation(this, "PowerOn: ir command '{0}'", IrStandardCommands.PowerOn);
             SendIrCommand(IrStandardCommands.PowerOn);
+        }
+
+        /// <summary>
+        /// True when this device is configured as a control-only remote, in which case it must never
+        /// send power - the paired driver that owns the panel owns power. Logged rather than silent,
+        /// because a suppressed power command is otherwise indistinguishable from a dead IR emitter.
+        /// </summary>
+        private bool SuppressPower(string caller)
+        {
+            if (!propertiesConfig.RemoteOnly) return false;
+
+            Debug.LogVerbose(this, "{0} suppressed: remoteOnly is set, so the paired display driver owns power", caller);
+            return true;
         }
 
         /// <summary>
@@ -199,6 +211,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public override void PowerOff()
         {
+            if (SuppressPower("PowerOff")) return;
+
             Debug.LogInformation(this, "PowerOff: ir command '{0}'", IrStandardCommands.PowerOff);
             SendIrCommand(IrStandardCommands.PowerOff);
         }
@@ -218,6 +232,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public override void PowerToggle()
         {
+            if (SuppressPower("PowerToggle")) return;
+
             Debug.LogInformation(this, "PowerToggle: ir command '{0}'", IrStandardCommands.PowerToggle);
             SendIrCommand(IrStandardCommands.PowerToggle);
         }
@@ -298,6 +314,12 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             AddRoutingInputPort(
                 new RoutingInputPort(RoutingPortNames.AnyVideoIn, eRoutingSignalType.Audio | eRoutingSignalType.Video,
                     eRoutingPortConnectionType.Streaming, new Action(InputPrimeVideo), this), IrStandardCommands.PrimeVideo);
+            // TODO: Disney+ and Samsung TV Plus are not in FlatPanelDisplay_LG_65SK9500-SmartTV.ir,
+            // and their command names were guesses by convention rather than read off a driver.
+            // Registering them anyway would advertise inputs the display cannot switch to - the
+            // front end lists whatever this dictionary holds, so they rendered as dead buttons.
+            // If codes turn up, add them to the .ir file first, then restore the constants, the
+            // routing ports and these entries together.
 
             Inputs = new LgDisplayIrInputs
             {
@@ -558,6 +580,14 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             // if already on, just send command
             SendIrCommand(cmd);
 
+            // A remote never powers the panel, so there is no power-on to wait on and nothing to
+            // re-send afterwards. Returning here also avoids the second SendIrCommand below, which
+            // for an app button would fire the same IR twice.
+            if (propertiesConfig.RemoteOnly)
+            {
+                Debug.LogVerbose(this, "ExecuteSwitch: remoteOnly is set, skipping the implicit PowerOn and warmup re-send");
+                return;
+            }
 
             // if warming up, wait for warmup to complete before sending command
             EventHandler<FeedbackEventArgs> handler = null; // necessary to allow reference inside lambda to handler
@@ -602,6 +632,260 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             Debug.LogInformation(this, "MuteToggle: ir command '{0}'", IrStandardCommands.MuteToggle);
             SendIrCommand(IrStandardCommands.MuteToggle);
+        }
+
+        #endregion
+
+
+        #region IDPad Members
+
+        public void Up(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.DpadUp);
+        }
+
+        public void Down(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.DpadDown);
+        }
+
+        public void Left(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.DpadLeft);
+        }
+
+        public void Right(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.DpadRight);
+        }
+
+        public void Select(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.DpadSelect);
+        }
+
+        public void Menu(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.Menu);
+        }
+
+        /// <summary>
+        /// Shared with IChannel.Exit - a single method satisfies both interfaces.
+        /// </summary>
+        public void Exit(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.Exit);
+        }
+
+        #endregion
+
+
+        #region INumericKeypad Members
+
+        public void Digit0(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.KP0);
+        }
+
+        public void Digit1(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.KP1);
+        }
+
+        public void Digit2(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.KP2);
+        }
+
+        public void Digit3(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.KP3);
+        }
+
+        public void Digit4(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.KP4);
+        }
+
+        public void Digit5(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.KP5);
+        }
+
+        public void Digit6(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.KP6);
+        }
+
+        public void Digit7(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.KP7);
+        }
+
+        public void Digit8(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.KP8);
+        }
+
+        public void Digit9(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.KP9);
+        }
+
+        // No LG remote-key equivalent for the keypad's accessory buttons (e.g. set-top-box
+        // Dash/Enter) - hidden on the front end via HasKeypadAccessoryButtonN = false.
+        public bool HasKeypadAccessoryButton1 => false;
+        public string KeypadAccessoryButton1Label => string.Empty;
+        public void KeypadAccessoryButton1(bool pressRelease) { }
+
+        public bool HasKeypadAccessoryButton2 => false;
+        public string KeypadAccessoryButton2Label => string.Empty;
+        public void KeypadAccessoryButton2(bool pressRelease) { }
+
+        #endregion
+
+
+        #region ITransport Members
+
+        public void Play(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.Play);
+        }
+
+        public void Pause(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.Pause);
+        }
+
+        public void Rewind(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.Rewind);
+        }
+
+        public void FFwd(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.FastForward);
+        }
+
+        // No corresponding IR command exists in IrStandardCommands for these on a typical LG
+        // TV remote - no-ops, matching AppleTV's precedent for unmapped ITransport members.
+        public void ChapMinus(bool pressRelease) { }
+        public void ChapPlus(bool pressRelease) { }
+        public void Stop(bool pressRelease) { }
+        public void Record(bool pressRelease) { }
+
+        #endregion
+
+
+        #region IChannel Members
+
+        public void ChannelUp(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.ChannelUp);
+        }
+
+        public void ChannelDown(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.ChannelDown);
+        }
+
+        public void LastChannel(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.Last);
+        }
+
+        public void Guide(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.Guide);
+        }
+
+        // No dedicated "info" IR command exists in IrStandardCommands today - no-op.
+        public void Info(bool pressRelease) { }
+
+        // IChannel.Exit is satisfied by the IDPad.Exit implementation above.
+
+        #endregion
+
+
+        #region IColor Members
+
+        public void Red(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.FuncRed);
+        }
+
+        public void Green(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.FuncGreen);
+        }
+
+        public void Yellow(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.FuncYellow);
+        }
+
+        public void Blue(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.FuncBlue);
+        }
+
+        #endregion
+
+
+        #region Remote buttons with no matching core interface yet
+
+        // Home, Back, Enter, page up/down and sleep have no dedicated core DeviceTypeInterfaces
+        // member (IDPad only has Menu/Exit). Exposed as plain methods - same precedent as
+        // InputNetflix/InputPrimeVideo above - callable via devjson today; wiring these into the
+        // React app's UI needs either a core interface addition (out of scope this pass - same
+        // "touches shared core" category flagged for the Apple TV / IrDisplayBase questions) or a
+        // room-plugin-specific messenger action.
+
+        public void Home(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.Home);
+        }
+
+        public void Back(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.Back);
+        }
+
+        public void Enter(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.Enter);
         }
 
         #endregion
