@@ -1,4 +1,4 @@
-# PepperDash Essentials LG Display Plugin (c) 2025
+# PepperDash Essentials LG Display Plugin (c) 2026
 
 ## License
 

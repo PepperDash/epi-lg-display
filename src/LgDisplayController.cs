@@ -12,14 +12,13 @@ using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges;
 using PepperDash.Essentials.Core.DeviceTypeInterfaces;
 using PepperDash.Essentials.Core.Queues;
-using PepperDash.Essentials.Devices.Displays;
 using TwoWayDisplayBase = PepperDash.Essentials.Devices.Common.Displays.TwoWayDisplayBase;
 
 
 namespace PepperDash.Essentials.Plugins.Lg.Display
 {
     public class LgDisplayController : TwoWayDisplayBase, IBasicVolumeWithFeedback, ICommunicationMonitor,
-        IInputHdmi1, IInputHdmi2, IInputHdmi3, IInputHdmi4, IInputDisplayPort1, IBridgeAdvanced, IHasInputs<string>, IBasicVideoMuteWithFeedback, IWarmingCooling
+        IBridgeAdvanced, IHasInputs<string>, IBasicVideoMuteWithFeedback, IWarmingCooling
     {
         GenericQueue receiveQueue;
         public const int InputPowerOn = 101;
@@ -45,7 +44,10 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         private ushort volumeLevelForSig;
         private readonly bool smallDisplay;
         private readonly bool overrideWol;
-        //private GenericUdpServer _woLServer;
+        private readonly string wolBroadcastAddress;
+        private readonly string wolMacAddress;
+        private readonly ushort wolPort;
+        private GenericUdpServer wolServer;
         private readonly LgDisplayPropertiesConfig config;
 
 
@@ -60,7 +62,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             var props = config;
             if (props == null)
             {
-                Debug.LogError(this, "Display configuration must be included");
+                this.LogError("Display configuration must be included");
                 return;
             }
             smallDisplay = props.SmallDisplay;
@@ -68,10 +70,12 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             upperLimit = props.volumeUpperLimit;
             lowerLimit = props.volumeLowerLimit;
             overrideWol = props.OverrideWol;
+            wolMacAddress = props.macAddress;
+            wolBroadcastAddress = props.WolBroadcastAddress;
+            wolPort = props.WolPort ?? 9;
             pollIntervalMs = props.pollIntervalMs > 1999 ? props.pollIntervalMs : 10000;
             coolingTimeMs = props.coolingTimeMs > 0 ? props.coolingTimeMs : 10000;
             warmingTimeMs = props.warmingTimeMs > 0 ? props.warmingTimeMs : 8000;
-            //UdpSocketKey = props.udpSocketKey;
 
             InputNumberFeedback = new IntFeedback(() =>
             {
@@ -112,7 +116,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
                 if (isWarmingUp)
                 {
-                    WarmupTimer = new CTimer(o =>
+                    WarmupTimer = new System.Timers.Timer(WarmupTime) { AutoReset = false };
+                    WarmupTimer.Elapsed += (s, e) =>
                     {
                         IsWarmingUp = false;
 
@@ -120,7 +125,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                         {
                             InputGet();
                         }
-                    }, WarmupTime);
+                    };
+                    WarmupTimer.Start();
                 }
                 else if (WarmupTimer != null)
                 {
@@ -144,7 +150,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
                 if (isCoolingDown)
                 {
-                    CooldownTimer = new CTimer(o => { IsCoolingDown = false; }, CooldownTime);
+                    CooldownTimer = new System.Timers.Timer(CooldownTime) { AutoReset = false };
+                    CooldownTimer.Elapsed += (s, e) => { IsCoolingDown = false; };
+                    CooldownTimer.Start();
                 }
                 else if (CooldownTimer != null)
                 {
@@ -379,8 +387,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 joinMap.SetCustomJoinData(customJoins);
             }
 
-            Debug.LogInformation(this, "Linking to Trilist '{0}'", trilist.ID.ToString("X"));
-            Debug.LogInformation(this, "Linking to Bridge Type {0}", GetType().Name);
+            this.LogInformation("Linking to Trilist '{TrilistId}'", trilist.ID.ToString("X"));
+            this.LogInformation("Linking to Bridge Type {BridgeType}", GetType().Name);
 
             // links to bridge
             // device name
@@ -442,7 +450,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 InputNumberFeedback.LinkInputSig(trilist.UShortInput[joinMap.InputSelect.JoinNumber]);
 
             if (CurrentInputFeedback != null)
-                CurrentInputFeedback.OutputChange += (sender, args) => Debug.LogDebug(this, "CurrentInputFeedback: {0}", args.StringValue);
+                CurrentInputFeedback.OutputChange += (sender, args) => this.LogDebug("CurrentInputFeedback: {Value}", args.StringValue);
 
             // bridge online change
             trilist.OnlineStatusChange += (sender, args) =>
@@ -499,7 +507,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             if (socket != null)
             {
                 //This Instance Uses IP Control
-                Debug.LogVerbose(this, "The LG Display Plugin does NOT support IP Control currently");
+                this.LogVerbose("The LG Display Plugin does NOT support IP Control currently");
             }
             else
             {
@@ -563,11 +571,11 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             SetupInputs();
         }
 
-        public override bool CustomActivate()
+        protected override bool CustomActivate()
         {
             Communication.Connect();
 
-            if (isSerialComm || overrideWol)
+            if (isSerialComm || overrideWol || HasWakeOnLanConfiguration)
             {
                 CommunicationMonitor.Start();
             }
@@ -738,7 +746,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
             catch (Exception e)
             {
-                Debug.LogError(this, "Failed to normalize device ID '{0}': {1}", deviceId, e.Message);
+                this.LogError("Failed to normalize device ID '{DeviceId}': {Error}", deviceId, e.Message);
                 return deviceId; // Return original if parsing fails
             }
         }
@@ -1014,6 +1022,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             var powerCommandSent = false;
 
+            SendWakeOnLan();
+
             if (isSerialComm || overrideWol)
             {
                 SendData(string.Format("ka {0} {1}", Id, smallDisplay ? "1" : "01"));
@@ -1123,7 +1133,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
             catch (Exception e)
             {
-                Debug.LogVerbose(this, "Unable to parse {0} to Int32 {1}", s, e);
+                this.LogVerbose("Unable to parse {Value} to Int32 {Error}", s, e);
             }
         }
 
@@ -1159,7 +1169,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
             catch (Exception e)
             {
-                Debug.LogVerbose(this, "Error updating volumefb for value: {1}: {0}", e, s);
+                this.LogVerbose("Error updating volumefb for value: {Value}: {Error}", s, e);
             }
         }
 
@@ -1184,7 +1194,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
             catch (Exception e)
             {
-                Debug.LogVerbose(this, "Unable to parse {0} to Int32 {1}", s, e);
+                this.LogVerbose("Unable to parse {Value} to Int32 {Error}", s, e);
             }
         }
 
@@ -1198,7 +1208,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             {
                 if (data < 0 || data >= inputFeedback.Count)
                 {
-                    Debug.LogVerbose(this, "Input index {0} out of range for _inputFeedback (size {1})", data, inputFeedback.Count);
+                    this.LogVerbose("Input index {Index} out of range for _inputFeedback (size {Size})", data, inputFeedback.Count);
                     return;
                 }
 
@@ -1221,7 +1231,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
             catch (Exception e)
             {
-                Debug.LogError(this, "{0}", e.Message);
+                this.LogError("{Error}", e.Message);
             }
         }
 
@@ -1248,40 +1258,51 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         }
 
 
-        private void WolFunction(string macAddress)
+        private bool HasWakeOnLanConfiguration =>
+            !string.IsNullOrWhiteSpace(wolMacAddress) &&
+            !string.IsNullOrWhiteSpace(wolBroadcastAddress);
+
+        private void SendWakeOnLan()
         {
-            if (Regex.IsMatch(macAddress, @"^([0-9A-Fa-f]{2}[\.:-]){5}([0-9A-Fa-f]{2})$") ||
-                Regex.IsMatch(macAddress, @"^([0-9A-Fa-f]{12})"))
+            if (!HasWakeOnLanConfiguration)
             {
-                var address = Regex.Replace(macAddress, @"(-|:|\.)", "").ToLower();
-
-                var counter = 0;
-
-                var bytes = new byte[1024];
-
-                //Packet starts with 6 iterations of 0xFF
-                for (var i = 0; i < 6; i++)
-                {
-                    bytes[counter++] = 0xFF;
-                }
-
-                //Packet has 16 iterations of the mac address
-                for (var y = 0; y < 16; y++)
-                {
-                    var i = 0;
-                    for (var z = 0; z < 6; z++)
-                    {
-                        bytes[counter++] =
-                            byte.Parse(address.Substring(i, 2),
-                                NumberStyles.HexNumber);
-                        i += 2;
-                    }
-                }
+                this.LogWarning("Wake-on-LAN skipped: macAddress configured={HasMacAddress}, wolBroadcastAddress configured={HasBroadcastAddress}",
+                    !string.IsNullOrWhiteSpace(wolMacAddress), !string.IsNullOrWhiteSpace(wolBroadcastAddress));
                 return;
             }
 
-            Debug.LogVerbose(this, "Invalid MAC Address sent to WolFunction - {0}", macAddress);
-            throw new ArgumentException("Invalid MAC Address");
+            var normalizedMacAddress = Regex.Replace(wolMacAddress, @"[-:.]", string.Empty);
+            if (!Regex.IsMatch(normalizedMacAddress, @"^[0-9A-Fa-f]{12}$"))
+            {
+                this.LogWarning("Wake-on-LAN is configured with an invalid MAC address: {MacAddress}", wolMacAddress);
+                return;
+            }
+
+            var macAddressBytes = Enumerable.Range(0, 6)
+                .Select(index => byte.Parse(normalizedMacAddress.Substring(index * 2, 2), NumberStyles.HexNumber))
+                .ToArray();
+            var magicPacket = new byte[102];
+
+            for (var index = 0; index < 6; index++)
+                magicPacket[index] = 0xFF;
+
+            for (var index = 6; index < magicPacket.Length; index += macAddressBytes.Length)
+                Buffer.BlockCopy(macAddressBytes, 0, magicPacket, index, macAddressBytes.Length);
+
+            wolServer ??= new GenericUdpServer(Key + "-wol", wolBroadcastAddress, wolPort, magicPacket.Length);
+            if (!wolServer.IsConnected)
+                wolServer.Connect();
+
+            if (!wolServer.IsConnected)
+            {
+                this.LogError("Wake-on-LAN UDP socket could not connect to {BroadcastAddress}:{Port}", wolBroadcastAddress, wolPort);
+                return;
+            }
+
+            for (var attempt = 0; attempt < 3; attempt++)
+                wolServer.SendBytes(magicPacket);
+
+            this.LogInformation("Wake-on-LAN magic packets sent to {BroadcastAddress}:{Port}", wolBroadcastAddress, wolPort);
         }
     }
 }

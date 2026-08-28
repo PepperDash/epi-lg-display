@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using PepperDash.Core;
 
 namespace PepperDash.Essentials.Plugins.Lg.Display
 {
@@ -113,7 +112,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         public static string GetCommandValue(string commandName)
         {
-            Debug.LogInformation("IrStandardCommands: GetCommandValue() called for commandName-'{0}'", commandName);
             if (CommandDictionary.TryGetValue(commandName, out var value))
                 return value;
             return null;

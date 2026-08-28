@@ -1,0 +1,118 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://pepperdash.com/schemas/epi-lg-display/lgDisplay.schema.json",
+  "title": "lgDisplay",
+  "description": "Device config entry for a device of type \"lgDisplay\". Properties object for a device of type \"lgDisplay\" (also \"lgPlugin\", \"lg\"), backed by LgDisplayPropertiesConfig (LgDisplayPropertiesConfig.cs).",
+  "type": "object",
+  "properties": {
+    "key": {
+      "type": "string",
+      "description": "Unique identifier for this device within the configuration file."
+    },
+    "name": {
+      "type": "string",
+      "description": "Friendly display name for this device."
+    },
+    "type": {
+      "type": "string",
+      "description": "Discriminator identifying the plugin factory that instantiates this device. Accepted aliases are equivalent.",
+      "enum": [
+        "lgDisplay",
+        "lgPlugin",
+        "lg"
+      ]
+    },
+    "properties": {
+      "$ref": "#/$defs/properties",
+      "description": "Properties object for a device of type \"lgDisplay\" (also \"lgPlugin\", \"lg\"), backed by LgDisplayPropertiesConfig (LgDisplayPropertiesConfig.cs)."
+    }
+  },
+  "required": [
+    "key",
+    "name",
+    "type",
+    "properties"
+  ],
+  "$defs": {
+    "properties": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "LG display Set ID used in the LG serial/IP control protocol."
+        },
+        "volumeUpperLimit": {
+          "type": "integer",
+          "description": "Upper bound for volume commands."
+        },
+        "volumeLowerLimit": {
+          "type": "integer",
+          "description": "Lower bound for volume commands."
+        },
+        "pollIntervalMs": {
+          "type": "integer",
+          "description": "Communication monitor poll interval, in milliseconds."
+        },
+        "coolingTimeMs": {
+          "type": "integer",
+          "description": "Simulated cool-down duration after power off, in milliseconds."
+        },
+        "warmingTimeMs": {
+          "type": "integer",
+          "description": "Simulated warm-up duration after power on, in milliseconds."
+        },
+        "udpSocketKey": {
+          "type": "string",
+          "description": "Device key of the shared UDP socket device used for Wake-on-LAN, if applicable."
+        },
+        "macAddress": {
+          "type": "string",
+          "description": "MAC address used for Wake-on-LAN."
+        },
+        "wolBroadcastAddress": {
+          "type": "string",
+          "description": "Broadcast address used to send the Wake-on-LAN magic packet."
+        },
+        "wolPort": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "UDP port used for the Wake-on-LAN magic packet."
+        },
+        "smallDisplay": {
+          "type": "boolean",
+          "description": "Indicates this is a small-form-factor LG display (affects supported command set)."
+        },
+        "overrideWol": {
+          "type": "boolean",
+          "description": "When true, overrides default Wake-on-LAN behavior."
+        },
+        "friendlyNames": {
+          "type": "array",
+          "description": "Friendly name overrides for display inputs, and optional hiding of specific inputs from the UI.",
+          "items": {
+            "$ref": "#/$defs/friendlyName"
+          }
+        }
+      }
+    },
+    "friendlyName": {
+      "type": "object",
+      "properties": {
+        "inputKey": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "hideInput": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "inputKey"
+      ]
+    }
+  }
+}
