@@ -143,6 +143,19 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             { "primeVideo", PrimeVideo }
         };
 
+        /// <summary>
+        /// True for an absolute input or app selection (HDMI_1, NETFLIX, ...) - the commands a warm-up
+        /// replays - as opposed to navigation, volume or the relative INPUT_CYCLE.
+        /// </summary>
+        public static bool IsInputSelection(string command)
+        {
+            foreach (var input in InputKeyCommands.Values)
+                if (string.Equals(input, command, StringComparison.OrdinalIgnoreCase))
+                    return true;
+
+            return false;
+        }
+
         public static string GetCommandValue(string commandName)
         {
             Debug.LogInformation("IrStandardCommands: GetCommandValue() called for commandName-'{0}'", commandName);

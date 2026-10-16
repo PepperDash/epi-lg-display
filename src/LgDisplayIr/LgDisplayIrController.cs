@@ -173,6 +173,24 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
             if (DispatchIfPower(cmd)) return;
 
+            // A direct input or app selection made during warm-up (InputHdmi2(), devjson) must become
+            // the selection the warm-up replays, or the replay would undo it with the older one.
+            // Input-cycle is relative, so replaying it would step again - it cancels the replay instead.
+            // Navigation and volume never touch the replay. Outside warm-up there is nothing to replay.
+            var resolved = IrStandardCommands.Resolve(cmd);
+            var isCycle = string.Equals(resolved, IrStandardCommands.InputToggle, StringComparison.OrdinalIgnoreCase);
+            if (isCycle || IrStandardCommands.IsInputSelection(resolved))
+            {
+                lock (switchLock)
+                {
+                    if (isWarmingUp)
+                        pendingSwitch = isCycle ? null : cmd;
+
+                    Transmit(cmd);
+                }
+                return;
+            }
+
             Transmit(cmd);
         }
 
