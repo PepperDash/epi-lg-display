@@ -49,7 +49,10 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         // input has to assume the panel may be off) but wrong for a remote: the paired RS232 device
         // owns power because it is the only one of the pair with real feedback, and two blind power
         // paths to one panel is how state desyncs.
-        [JsonProperty("remoteOnly")]
+        //
+        // NullValueHandling.Ignore so an explicit null keeps the default rather than throwing in
+        // ToObject and stopping the device from being created.
+        [JsonProperty("remoteOnly", NullValueHandling = NullValueHandling.Ignore)]
         public bool RemoteOnly { get; set; }
 
         public LgDisplayPropertiesConfig()

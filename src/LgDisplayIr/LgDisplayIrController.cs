@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Crestron.SimplSharp;
 using Crestron.SimplSharpPro.DeviceSupport;
 using Epi.Display.Lg;
 using PepperDash.Core;
@@ -23,6 +24,18 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         public const int InputPowerOff = 102;
 
         public ISelectableItems<string> Inputs { get; private set; }
+
+        private CTimer warmupTimer;
+        private CTimer cooldownTimer;
+
+        // Power, warm-up and the post-warm-up input replay all run under switchLock. pendingSwitch is
+        // the one selection to re-send when warm-up ends; the generations let a timer callback that
+        // was already waiting on the lock (stopping a CTimer doesn't cancel a callback in flight)
+        // see that its warm-up or cool-down was superseded and do nothing.
+        private readonly object switchLock = new object();
+        private string pendingSwitch;
+        private int warmupGeneration;
+        private int cooldownGeneration;
 
 
         private bool isWarmingUp;
@@ -144,6 +157,12 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         #endregion
 
 
+        /// <summary>
+        /// Sends one command by name: an Inputs key, a constant name or a standard command. Power
+        /// commands are routed to PowerOn/PowerOff/PowerToggle rather than sent directly, so a raw power
+        /// command from devjson or a bridge gets the same remoteOnly suppression and warm-up/replay
+        /// handling as the named methods.
+        /// </summary>
         public void SendIrCommand(string cmd)
         {
             if (string.IsNullOrEmpty(cmd))
@@ -152,6 +171,36 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 return;
             }
 
+            if (DispatchIfPower(cmd)) return;
+
+            Transmit(cmd);
+        }
+
+        /// <summary>
+        /// Routes a power command to the matching named method and returns true; false for anything else.
+        /// </summary>
+        private bool DispatchIfPower(string cmd)
+        {
+            var resolved = IrStandardCommands.Resolve(cmd);
+
+            if (string.Equals(resolved, IrStandardCommands.PowerOn, StringComparison.OrdinalIgnoreCase))
+                PowerOn();
+            else if (string.Equals(resolved, IrStandardCommands.PowerOff, StringComparison.OrdinalIgnoreCase))
+                PowerOff();
+            else if (string.Equals(resolved, IrStandardCommands.PowerToggle, StringComparison.OrdinalIgnoreCase))
+                PowerToggle();
+            else
+                return false;
+
+            return true;
+        }
+
+        /// <summary>
+        /// Low-level send with no power handling - callers are the power methods themselves and
+        /// SendIrCommand/ExecuteSwitch after dispatch.
+        /// </summary>
+        private void Transmit(string cmd)
+        {
             // Resolved here rather than at each call site: ExecuteSwitch's string branch passes an
             // Inputs key straight through, and doing it once means no future caller can bypass it.
             // Resolution is idempotent, so the PowerOn/Menu/dpad paths that already pass standard
@@ -171,6 +220,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         #region  Power Members
 
+        // Power, warm-up and the replay each run as one unit under switchLock, so the commands go out in
+        // the order the operations happened and the warming/cooling state matches the last command sent.
+
         /// <summary>
         /// Set Power On For Device
         /// </summary>
@@ -178,20 +230,76 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             if (SuppressPower("PowerOn")) return;
 
-            Debug.LogInformation(this, "PowerOn: ir command '{0}'", IrStandardCommands.PowerOn);
-            SendIrCommand(IrStandardCommands.PowerOn);
+            lock (switchLock)
+                StartPowerOn();
+        }
+
+        // Caller holds switchLock.
+        private void StartPowerOn()
+        {
+            Transmit(IrStandardCommands.PowerOn);
+
+            cooldownGeneration++;
+            cooldownTimer?.Stop();
+            IsCoolingDown = false;
+            IsWarmingUp = true;
+
+            var generation = ++warmupGeneration;
+            warmupTimer?.Stop();
+            warmupTimer = new CTimer(o => OnWarmupComplete(generation), WarmupTime);
+        }
+
+        /// <summary>
+        /// Ends warm-up and replays the latest input selected during it, once - unless a later power
+        /// command superseded this warm-up.
+        /// </summary>
+        private void OnWarmupComplete(int generation)
+        {
+            lock (switchLock)
+            {
+                if (generation != warmupGeneration) return;
+
+                var pending = pendingSwitch;
+                pendingSwitch = null;
+
+                if (pending != null)
+                    Transmit(pending);
+
+                IsWarmingUp = false;
+            }
+        }
+
+        // Caller holds switchLock.
+        private void CancelWarmup()
+        {
+            pendingSwitch = null;
+            warmupGeneration++;
+            warmupTimer?.Stop();
+            IsWarmingUp = false;
+        }
+
+        // Same generation guard as warm-up, so a stale callback can't end a newer cool-down early.
+        private void OnCooldownComplete(int generation)
+        {
+            lock (switchLock)
+            {
+                if (generation != cooldownGeneration) return;
+
+                IsCoolingDown = false;
+            }
         }
 
         /// <summary>
         /// True when this device is configured as a control-only remote, in which case it must never
         /// send power - the paired driver that owns the panel owns power. Logged rather than silent,
         /// because a suppressed power command is otherwise indistinguishable from a dead IR emitter.
+        /// Debug rather than Verbose so it shows at the level people actually run with.
         /// </summary>
         private bool SuppressPower(string caller)
         {
             if (!propertiesConfig.RemoteOnly) return false;
 
-            Debug.LogVerbose(this, "{0} suppressed: remoteOnly is set, so the paired display driver owns power", caller);
+            Debug.LogDebug(this, "{0} suppressed: remoteOnly is set, so the paired display driver owns power", caller);
             return true;
         }
 
@@ -213,8 +321,16 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             if (SuppressPower("PowerOff")) return;
 
-            Debug.LogInformation(this, "PowerOff: ir command '{0}'", IrStandardCommands.PowerOff);
-            SendIrCommand(IrStandardCommands.PowerOff);
+            lock (switchLock)
+            {
+                CancelWarmup();
+                Transmit(IrStandardCommands.PowerOff);
+
+                IsCoolingDown = true;
+                var generation = ++cooldownGeneration;
+                cooldownTimer?.Stop();
+                cooldownTimer = new CTimer(o => OnCooldownComplete(generation), CooldownTime);
+            }
         }
 
         /// <summary>
@@ -234,8 +350,13 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             if (SuppressPower("PowerToggle")) return;
 
-            Debug.LogInformation(this, "PowerToggle: ir command '{0}'", IrStandardCommands.PowerToggle);
-            SendIrCommand(IrStandardCommands.PowerToggle);
+            // Blind IR can't tell which way a toggle goes, so treat every toggle as a possible
+            // power-off: a replay after it could wake the display it just turned off.
+            lock (switchLock)
+            {
+                CancelWarmup();
+                Transmit(IrStandardCommands.PowerToggle);
+            }
         }
 
         /// <summary>
@@ -345,6 +466,14 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
             foreach (var item in config.FriendlyNames)
             {
+                // A null entry ("friendlyNames": [null]) is skipped rather than allowed to throw here
+                // and stop the device from being created.
+                if (item == null)
+                {
+                    Debug.LogError(this, "UpdateInputFriendlyNames: null entry; skipping");
+                    continue;
+                }
+
                 Debug.LogInformation(this, $"UpdateInputFriendlyNames: key '{item.InputKey}', name '{item.Name}', hideInput '{item.HideInput}'");
 
                 if (string.IsNullOrEmpty(item.InputKey))
@@ -577,34 +706,29 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 }
             }
 
-            // if already on, just send command
-            SendIrCommand(cmd);
+            // A power selector is a power command, not an input: route it to the power methods so it
+            // never enters the switch path (which would send it, power on, and queue it for replay).
+            if (DispatchIfPower(cmd)) return;
 
             // A remote never powers the panel, so there is no power-on to wait on and nothing to
-            // re-send afterwards. Returning here also avoids the second SendIrCommand below, which
-            // for an app button would fire the same IR twice.
+            // re-send afterwards - one send, so an app button fires its IR exactly once.
             if (propertiesConfig.RemoteOnly)
             {
-                Debug.LogVerbose(this, "ExecuteSwitch: remoteOnly is set, skipping the implicit PowerOn and warmup re-send");
+                Transmit(cmd);
+                Debug.LogDebug(this, "ExecuteSwitch: remoteOnly is set, skipping the implicit PowerOn and warmup re-send");
                 return;
             }
 
-            // if warming up, wait for warmup to complete before sending command
-            EventHandler<FeedbackEventArgs> handler = null; // necessary to allow reference inside lambda to handler
-            handler = (o, a) =>
+            // Blind IR can't know whether the panel was off when the first command went out, so send
+            // it, power on, and re-send it once warm-up ends. One unit under the lock, so a power-off
+            // can't land between storing the selection and powering on and then be undone by the
+            // power-on; a later switch replaces the selection, and a power-off or toggle cancels it.
+            lock (switchLock)
             {
-                if (isWarmingUp)
-                {
-                    return;
-                }
-
-                IsWarmingUpFeedback.OutputChange -= handler;
-
-                SendIrCommand(cmd);
-
-            };
-            IsWarmingUpFeedback.OutputChange += handler; // attach and wait for on FB
-            PowerOn();
+                Transmit(cmd);
+                pendingSwitch = cmd;
+                StartPowerOn();
+            }
         }
 
         #endregion
