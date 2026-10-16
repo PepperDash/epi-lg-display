@@ -741,10 +741,14 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             // it, power on, and re-send it once warm-up ends. One unit under the lock, so a power-off
             // can't land between storing the selection and powering on and then be undone by the
             // power-on; a later switch replaces the selection, and a power-off or toggle cancels it.
+            // INPUT_CYCLE is relative: replaying it would step the input again, so it clears the pending
+            // selection (neither it nor an older selection replays) instead of becoming it.
+            var isCycle = string.Equals(IrStandardCommands.Resolve(cmd), IrStandardCommands.InputToggle, StringComparison.OrdinalIgnoreCase);
+
             lock (switchLock)
             {
                 Transmit(cmd);
-                pendingSwitch = cmd;
+                pendingSwitch = isCycle ? null : cmd;
                 StartPowerOn();
             }
         }
