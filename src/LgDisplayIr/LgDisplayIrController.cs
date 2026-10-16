@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Crestron.SimplSharp;
 using Crestron.SimplSharpPro.DeviceSupport;
 using Epi.Display.Lg;
 using PepperDash.Core;
@@ -12,7 +13,8 @@ using DisplayBase = PepperDash.Essentials.Devices.Common.Displays.DisplayBase;
 
 namespace PepperDash.Essentials.Plugins.Lg.Display
 {
-    public class LgDisplayIrController : DisplayBase, IBasicVolumeControls, IBridgeAdvanced, IHasInputs<string>
+    public class LgDisplayIrController : DisplayBase, IBasicVolumeControls, IBridgeAdvanced, IHasInputs<string>,
+        IDPad, INumericKeypad, ITransport, IChannel, IColor
     {
         private readonly LgDisplayPropertiesConfig propertiesConfig;
 
@@ -22,6 +24,18 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         public const int InputPowerOff = 102;
 
         public ISelectableItems<string> Inputs { get; private set; }
+
+        private CTimer warmupTimer;
+        private CTimer cooldownTimer;
+
+        // Power, warm-up and the post-warm-up input replay all run under switchLock. pendingSwitch is
+        // the one selection to re-send when warm-up ends; the generations let a timer callback that
+        // was already waiting on the lock (stopping a CTimer doesn't cancel a callback in flight)
+        // see that its warm-up or cool-down was superseded and do nothing.
+        private readonly object switchLock = new object();
+        private string pendingSwitch;
+        private int warmupGeneration;
+        private int cooldownGeneration;
 
 
         private bool isWarmingUp;
@@ -73,19 +87,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             WarmupTime = propertiesConfig.warmingTimeMs > 0 ? propertiesConfig.warmingTimeMs : 8000;
         }
 
-
-        // protected override void CreateMobileControlMessengers()
-        // {
-        //     var mc = DeviceManager.AllDevices.OfType<IMobileControl>().FirstOrDefault();
-        //     if (mc == null)
-        //     {
-        //         Debug.LogInformation("Mobile Control not found");
-        //         return;
-        //     }
-
-        //     var messenger = new LgDisplayIrMobileControlMessenger($"{Key}", $"/device/{Key}", this);
-        //     mc.AddDeviceMessenger(messenger);
-        // }
 
 
         #region IBridgeAdvanced Members
@@ -156,6 +157,12 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         #endregion
 
 
+        /// <summary>
+        /// Sends one command by name: an Inputs key, a constant name or a standard command. Power
+        /// commands are routed to PowerOn/PowerOff/PowerToggle rather than sent directly, so a raw power
+        /// command from devjson or a bridge gets the same remoteOnly suppression and warm-up/replay
+        /// handling as the named methods.
+        /// </summary>
         public void SendIrCommand(string cmd)
         {
             if (string.IsNullOrEmpty(cmd))
@@ -164,23 +171,154 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 return;
             }
 
-            Debug.LogInformation(this, "SendIrCommand: ir command '{0}'", cmd);
+            if (DispatchIfPower(cmd)) return;
 
-            irController?.PressRelease(cmd, true);
-            irController?.PressRelease(cmd, false);
+            // A direct input or app selection made during warm-up (InputHdmi2(), devjson) must become
+            // the selection the warm-up replays, or the replay would undo it with the older one.
+            // Input-cycle is relative, so replaying it would step again - it cancels the replay instead.
+            // Navigation and volume never touch the replay. Outside warm-up there is nothing to replay.
+            var resolved = IrStandardCommands.Resolve(cmd);
+            var isCycle = string.Equals(resolved, IrStandardCommands.InputToggle, StringComparison.OrdinalIgnoreCase);
+            if (isCycle || IrStandardCommands.IsInputSelection(resolved))
+            {
+                lock (switchLock)
+                {
+                    if (isWarmingUp)
+                        pendingSwitch = isCycle ? null : cmd;
+
+                    Transmit(cmd);
+                }
+                return;
+            }
+
+            Transmit(cmd);
+        }
+
+        /// <summary>
+        /// Routes a power command to the matching named method and returns true; false for anything else.
+        /// </summary>
+        private bool DispatchIfPower(string cmd)
+        {
+            var resolved = IrStandardCommands.Resolve(cmd);
+
+            if (string.Equals(resolved, IrStandardCommands.PowerOn, StringComparison.OrdinalIgnoreCase))
+                PowerOn();
+            else if (string.Equals(resolved, IrStandardCommands.PowerOff, StringComparison.OrdinalIgnoreCase))
+                PowerOff();
+            else if (string.Equals(resolved, IrStandardCommands.PowerToggle, StringComparison.OrdinalIgnoreCase))
+                PowerToggle();
+            else
+                return false;
+
+            return true;
+        }
+
+        /// <summary>
+        /// Low-level send with no power handling - callers are the power methods themselves and
+        /// SendIrCommand/ExecuteSwitch after dispatch.
+        /// </summary>
+        private void Transmit(string cmd)
+        {
+            // Resolved here rather than at each call site: ExecuteSwitch's string branch passes an
+            // Inputs key straight through, and doing it once means no future caller can bypass it.
+            // Resolution is idempotent, so the PowerOn/Menu/dpad paths that already pass standard
+            // commands are unaffected.
+            var resolved = IrStandardCommands.Resolve(cmd);
+
+            if (!string.Equals(resolved, cmd, StringComparison.Ordinal))
+                Debug.LogVerbose(this, "SendIrCommand: resolved selector '{0}' to ir command '{1}'", cmd, resolved);
+
+            Debug.LogInformation(this, "SendIrCommand: ir command '{0}'", resolved);
+
+            irController?.PressRelease(resolved, true);
+            irController?.PressRelease(resolved, false);
         }
 
 
 
         #region  Power Members
 
+        // Power, warm-up and the replay each run as one unit under switchLock, so the commands go out in
+        // the order the operations happened and the warming/cooling state matches the last command sent.
+
         /// <summary>
         /// Set Power On For Device
         /// </summary>
         public override void PowerOn()
         {
-            Debug.LogInformation(this, "PowerOn: ir command '{0}'", IrStandardCommands.PowerOn);
-            SendIrCommand(IrStandardCommands.PowerOn);
+            if (SuppressPower("PowerOn")) return;
+
+            lock (switchLock)
+                StartPowerOn();
+        }
+
+        // Caller holds switchLock.
+        private void StartPowerOn()
+        {
+            Transmit(IrStandardCommands.PowerOn);
+
+            cooldownGeneration++;
+            cooldownTimer?.Stop();
+            IsCoolingDown = false;
+            IsWarmingUp = true;
+
+            var generation = ++warmupGeneration;
+            warmupTimer?.Stop();
+            warmupTimer = new CTimer(o => OnWarmupComplete(generation), WarmupTime);
+        }
+
+        /// <summary>
+        /// Ends warm-up and replays the latest input selected during it, once - unless a later power
+        /// command superseded this warm-up.
+        /// </summary>
+        private void OnWarmupComplete(int generation)
+        {
+            lock (switchLock)
+            {
+                if (generation != warmupGeneration) return;
+
+                var pending = pendingSwitch;
+                pendingSwitch = null;
+
+                if (pending != null)
+                    Transmit(pending);
+
+                IsWarmingUp = false;
+            }
+        }
+
+        // Caller holds switchLock.
+        private void CancelWarmup()
+        {
+            pendingSwitch = null;
+            warmupGeneration++;
+            warmupTimer?.Stop();
+            IsWarmingUp = false;
+        }
+
+        // Same generation guard as warm-up, so a stale callback can't end a newer cool-down early.
+        private void OnCooldownComplete(int generation)
+        {
+            lock (switchLock)
+            {
+                if (generation != cooldownGeneration) return;
+
+                IsCoolingDown = false;
+            }
+        }
+
+        /// <summary>
+        /// True when this device is configured as a control-only remote, in which case it must never
+        /// send power - the paired driver that owns the panel owns power. Logged rather than silent,
+        /// because a suppressed power command is otherwise indistinguishable from a dead IR emitter.
+        /// Debug rather than Verbose so it shows at the level people actually run with.
+        /// </summary>
+        private bool SuppressPower(string caller)
+        {
+            if (!propertiesConfig.RemoteOnly) return false;
+
+            Debug.LogDebug(this, "{0} suppressed: remoteOnly is set, so the paired display driver owns power", caller);
+            return true;
         }
 
         /// <summary>
@@ -199,8 +337,18 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public override void PowerOff()
         {
-            Debug.LogInformation(this, "PowerOff: ir command '{0}'", IrStandardCommands.PowerOff);
-            SendIrCommand(IrStandardCommands.PowerOff);
+            if (SuppressPower("PowerOff")) return;
+
+            lock (switchLock)
+            {
+                CancelWarmup();
+                Transmit(IrStandardCommands.PowerOff);
+
+                IsCoolingDown = true;
+                var generation = ++cooldownGeneration;
+                cooldownTimer?.Stop();
+                cooldownTimer = new CTimer(o => OnCooldownComplete(generation), CooldownTime);
+            }
         }
 
         /// <summary>
@@ -218,8 +366,15 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public override void PowerToggle()
         {
-            Debug.LogInformation(this, "PowerToggle: ir command '{0}'", IrStandardCommands.PowerToggle);
-            SendIrCommand(IrStandardCommands.PowerToggle);
+            if (SuppressPower("PowerToggle")) return;
+
+            // Blind IR can't tell which way a toggle goes, so treat every toggle as a possible
+            // power-off: a replay after it could wake the display it just turned off.
+            lock (switchLock)
+            {
+                CancelWarmup();
+                Transmit(IrStandardCommands.PowerToggle);
+            }
         }
 
         /// <summary>
@@ -298,6 +453,12 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             AddRoutingInputPort(
                 new RoutingInputPort(RoutingPortNames.AnyVideoIn, eRoutingSignalType.Audio | eRoutingSignalType.Video,
                     eRoutingPortConnectionType.Streaming, new Action(InputPrimeVideo), this), IrStandardCommands.PrimeVideo);
+            // TODO: Disney+ and Samsung TV Plus are not in FlatPanelDisplay_LG_65SK9500-SmartTV.ir,
+            // and their command names were guesses by convention rather than read off a driver.
+            // Registering them anyway would advertise inputs the display cannot switch to - the
+            // front end lists whatever this dictionary holds, so they rendered as dead buttons.
+            // If codes turn up, add them to the .ir file first, then restore the constants, the
+            // routing ports and these entries together.
 
             Inputs = new LgDisplayIrInputs
             {
@@ -323,6 +484,14 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
             foreach (var item in config.FriendlyNames)
             {
+                // A null entry ("friendlyNames": [null]) is skipped rather than allowed to throw here
+                // and stop the device from being created.
+                if (item == null)
+                {
+                    Debug.LogError(this, "UpdateInputFriendlyNames: null entry; skipping");
+                    continue;
+                }
+
                 Debug.LogInformation(this, $"UpdateInputFriendlyNames: key '{item.InputKey}', name '{item.Name}', hideInput '{item.HideInput}'");
 
                 if (string.IsNullOrEmpty(item.InputKey))
@@ -555,26 +724,33 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 }
             }
 
-            // if already on, just send command
-            SendIrCommand(cmd);
+            // A power selector is a power command, not an input: route it to the power methods so it
+            // never enters the switch path (which would send it, power on, and queue it for replay).
+            if (DispatchIfPower(cmd)) return;
 
-
-            // if warming up, wait for warmup to complete before sending command
-            EventHandler<FeedbackEventArgs> handler = null; // necessary to allow reference inside lambda to handler
-            handler = (o, a) =>
+            // A remote never powers the panel, so there is no power-on to wait on and nothing to
+            // re-send afterwards - one send, so an app button fires its IR exactly once.
+            if (propertiesConfig.RemoteOnly)
             {
-                if (isWarmingUp)
-                {
-                    return;
-                }
+                Transmit(cmd);
+                Debug.LogDebug(this, "ExecuteSwitch: remoteOnly is set, skipping the implicit PowerOn and warmup re-send");
+                return;
+            }
 
-                IsWarmingUpFeedback.OutputChange -= handler;
+            // Blind IR can't know whether the panel was off when the first command went out, so send
+            // it, power on, and re-send it once warm-up ends. One unit under the lock, so a power-off
+            // can't land between storing the selection and powering on and then be undone by the
+            // power-on; a later switch replaces the selection, and a power-off or toggle cancels it.
+            // INPUT_CYCLE is relative: replaying it would step the input again, so it clears the pending
+            // selection (neither it nor an older selection replays) instead of becoming it.
+            var isCycle = string.Equals(IrStandardCommands.Resolve(cmd), IrStandardCommands.InputToggle, StringComparison.OrdinalIgnoreCase);
 
-                SendIrCommand(cmd);
-
-            };
-            IsWarmingUpFeedback.OutputChange += handler; // attach and wait for on FB
-            PowerOn();
+            lock (switchLock)
+            {
+                Transmit(cmd);
+                pendingSwitch = isCycle ? null : cmd;
+                StartPowerOn();
+            }
         }
 
         #endregion
@@ -602,6 +778,260 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             Debug.LogInformation(this, "MuteToggle: ir command '{0}'", IrStandardCommands.MuteToggle);
             SendIrCommand(IrStandardCommands.MuteToggle);
+        }
+
+        #endregion
+
+
+        #region IDPad Members
+
+        public void Up(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.DpadUp);
+        }
+
+        public void Down(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.DpadDown);
+        }
+
+        public void Left(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.DpadLeft);
+        }
+
+        public void Right(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.DpadRight);
+        }
+
+        public void Select(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.DpadSelect);
+        }
+
+        public void Menu(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.Menu);
+        }
+
+        /// <summary>
+        /// Shared with IChannel.Exit - a single method satisfies both interfaces.
+        /// </summary>
+        public void Exit(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.Exit);
+        }
+
+        #endregion
+
+
+        #region INumericKeypad Members
+
+        public void Digit0(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.KP0);
+        }
+
+        public void Digit1(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.KP1);
+        }
+
+        public void Digit2(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.KP2);
+        }
+
+        public void Digit3(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.KP3);
+        }
+
+        public void Digit4(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.KP4);
+        }
+
+        public void Digit5(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.KP5);
+        }
+
+        public void Digit6(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.KP6);
+        }
+
+        public void Digit7(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.KP7);
+        }
+
+        public void Digit8(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.KP8);
+        }
+
+        public void Digit9(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.KP9);
+        }
+
+        // No LG remote-key equivalent for the keypad's accessory buttons (e.g. set-top-box
+        // Dash/Enter) - hidden on the front end via HasKeypadAccessoryButtonN = false.
+        public bool HasKeypadAccessoryButton1 => false;
+        public string KeypadAccessoryButton1Label => string.Empty;
+        public void KeypadAccessoryButton1(bool pressRelease) { }
+
+        public bool HasKeypadAccessoryButton2 => false;
+        public string KeypadAccessoryButton2Label => string.Empty;
+        public void KeypadAccessoryButton2(bool pressRelease) { }
+
+        #endregion
+
+
+        #region ITransport Members
+
+        public void Play(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.Play);
+        }
+
+        public void Pause(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.Pause);
+        }
+
+        public void Rewind(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.Rewind);
+        }
+
+        public void FFwd(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.FastForward);
+        }
+
+        // No corresponding IR command exists in IrStandardCommands for these on a typical LG
+        // TV remote - no-ops, matching AppleTV's precedent for unmapped ITransport members.
+        public void ChapMinus(bool pressRelease) { }
+        public void ChapPlus(bool pressRelease) { }
+        public void Stop(bool pressRelease) { }
+        public void Record(bool pressRelease) { }
+
+        #endregion
+
+
+        #region IChannel Members
+
+        public void ChannelUp(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.ChannelUp);
+        }
+
+        public void ChannelDown(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.ChannelDown);
+        }
+
+        public void LastChannel(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.Last);
+        }
+
+        public void Guide(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.Guide);
+        }
+
+        // No dedicated "info" IR command exists in IrStandardCommands today - no-op.
+        public void Info(bool pressRelease) { }
+
+        // IChannel.Exit is satisfied by the IDPad.Exit implementation above.
+
+        #endregion
+
+
+        #region IColor Members
+
+        public void Red(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.FuncRed);
+        }
+
+        public void Green(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.FuncGreen);
+        }
+
+        public void Yellow(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.FuncYellow);
+        }
+
+        public void Blue(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.FuncBlue);
+        }
+
+        #endregion
+
+
+        #region Remote buttons with no matching core interface yet
+
+        // Home, Back, Enter, page up/down and sleep have no dedicated core DeviceTypeInterfaces
+        // member (IDPad only has Menu/Exit). Exposed as plain methods - same precedent as
+        // InputNetflix/InputPrimeVideo above - callable via devjson today; wiring these into the
+        // React app's UI needs either a core interface addition (out of scope this pass - same
+        // "touches shared core" category flagged for the Apple TV / IrDisplayBase questions) or a
+        // room-plugin-specific messenger action.
+
+        public void Home(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.Home);
+        }
+
+        public void Back(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.Back);
+        }
+
+        public void Enter(bool pressRelease)
+        {
+            if (pressRelease) return;
+            SendIrCommand(IrStandardCommands.Enter);
         }
 
         #endregion
