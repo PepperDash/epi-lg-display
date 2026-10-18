@@ -21,7 +21,7 @@ This repo contains a plugin for use with [PepperDash Essentials](https://github.
     "volumeUpperLimit": 100,
     "volumeLowerLimit": 0,
     "pollIntervalMs": 45000,
-    "coolingTime": 10000,
+    "coolingTimeMs": 10000,
     "warmingTimeMs": 10000,
     "smallDisplay": false,
     "control": {
@@ -37,7 +37,7 @@ This repo contains a plugin for use with [PepperDash Essentials](https://github.
         "hardwareHandshake": "None",
         "stopBits": 1
       }
-    }
+    },
     "friendlyNames": [                      //if you want to use friendly names, add this section
 	        {
 	        	"inputKey": "90",           //The input key for the input you want to use a friendly name for, this has to a valid input key(90,91,c0)
