@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Crestron.SimplSharp;
+using PepperDash.Core;
 
 namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
 {
@@ -12,6 +13,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
     {
         private const string Usage =
             "lgmock <deviceKey> status | power on|off | input 90|91|92|93|c0 | volume 0-100 | mute on|off | fault none|ng|silent";
+
+        // The console rejects help text over 79 bytes; the full usage prints when the command is run without arguments
+        private const string Help = "Mock LG display: lgmock <key> status|power|input|volume|mute|fault";
 
         private static readonly Dictionary<string, LgMockResponder> Responders =
             new Dictionary<string, LgMockResponder>(StringComparer.OrdinalIgnoreCase);
@@ -33,8 +37,16 @@ namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
                     return;
                 }
 
-                CrestronConsole.AddNewConsoleCommand(Handle, "lgmock", "Drive a mock LG display. " + Usage,
-                    ConsoleAccessLevelEnum.AccessOperator);
+                // The console command is a convenience: never let it stop the display from loading
+                try
+                {
+                    CrestronConsole.AddNewConsoleCommand(Handle, "lgmock", Help, ConsoleAccessLevelEnum.AccessOperator);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("Unable to add the lgmock console command: {0}", e.Message);
+                }
+
                 commandAdded = true;
             }
         }
