@@ -247,7 +247,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 scaled = (int)NumericalHelpers.Scale(level, 0, 65535, lowerLimit, upperLimit);
             }
 
-            SendData(string.Format("kf {0} {1}", Id, scaled));
+            // The panel reads the level as hex, like the feedback it returns
+            SendData(string.Format("kf {0} {1:X2}", Id, scaled));
         }
 
         /// <summary>
@@ -481,8 +482,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         private void Init()
         {
-            WarmupTime = warmingTimeMs > 0 ? warmingTimeMs : 10000;
-            CooldownTime = coolingTimeMs > 0 ? coolingTimeMs : 8000;
+            // Defaults are applied in the constructor (warm 8s, cool 10s), matching the IR controller
+            WarmupTime = warmingTimeMs;
+            CooldownTime = coolingTimeMs;
 
             inputFeedback = new List<bool>();
             InputFeedback = new List<BoolFeedback>();
