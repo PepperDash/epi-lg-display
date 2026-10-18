@@ -37,6 +37,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         private bool inputSwitchPending;
         private bool powerOnPending;
         private string lastCommandPrefix;
+        // Commands already re-polled after an NG; only touched on the receive queue's thread
+        private readonly HashSet<string> ngRetriedCommands = new HashSet<string>();
         private int lastVolumeSent;
         private bool powerIsOn;
         private bool videoIsMuted;
@@ -686,6 +688,15 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             if (statusAndValue.IndexOf("NG", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 this.LogVerbose("NG response received for command '{0}': {1}", command, s);
+
+                // Re-poll once per command; after that, wait for the regular poll. A panel that keeps
+                // answering NG would otherwise loop query -> NG -> query with no delay.
+                if (!ngRetriedCommands.Add(command))
+                {
+                    this.LogVerbose("Repeated NG for command '{0}'; waiting for the next poll", command);
+                    return;
+                }
+
                 PollAfterNgResponse(command);
                 return;
             }
@@ -705,6 +716,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     Id, normalizedExpected, id, normalizedReceived);
                 return;
             }
+
+            // An OK reply re-arms the one-time NG re-poll for this command
+            ngRetriedCommands.Remove(command);
 
             switch (command)
             {
