@@ -65,6 +65,43 @@ The `smallDisplay` configuration option is used to control padding of the power 
 
 For more configuration information, see the [PepperDash Essentials wiki](https://github.com/PepperDash/Essentials/wiki).
 
+## Mock Display (bench testing without hardware)
+
+The `lgDisplayMock` type builds the real LG controller on an in-process mock panel instead of a serial port. Power, warm-up and cool-down, inputs, volume, mute, polling and NG handling all run through the same code as with real hardware, so the room and the touchpanel behave the same way. To switch an existing display to the mock, change only `type`. Any `control` block is ignored.
+
+```json
+{
+  "key": "display01",
+  "name": "Display 1",
+  "group": "displays",
+  "type": "lgDisplayMock",
+  "properties": {
+    "id": "01",
+    "mock": {                     // optional; these are the defaults
+      "responseDelayMs": 50,      // delay before the panel answers each command
+      "powerOn": false,           // starting power state
+      "input": "90",              // starting input: 90-93 (HDMI 1-4) or c0 (DisplayPort)
+      "volume": 20,               // starting volume, 0-100
+      "muted": false,
+      "videoMuted": false
+    }
+  }
+}
+```
+
+Like a real panel, the mock answers NG to input, volume and mute commands while it is off, and it answers the RS232 protocol only, so it starts polling without `overrideWol`.
+
+Use the `lgmock` console command to make changes at the panel, or to inject faults. The controller picks up panel-side changes on its next poll.
+
+```
+lgmock display01 status
+lgmock display01 power on|off
+lgmock display01 input 90|91|92|93|c0
+lgmock display01 volume 0-100
+lgmock display01 mute on|off
+lgmock display01 fault none|ng|silent    // ng: answer everything with NG; silent: stop answering (goes offline)
+```
+
 ## Github Actions
 
 This repo contains two Github Action workflows that will build this project automatically. Modify the SOLUTION_PATH and SOLUTION_FILE environment variables as needed. Any branches named `feature/*`, `release/*`, `hotfix/*` or `development` will automatically be built with the action and create a release in the repository with a version number based on the latest release on the master branch. If there are no releases yet, the version number will be 0.0.1. The version number will be modified based on what branch triggered the build:
