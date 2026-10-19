@@ -114,3 +114,205 @@ This repo contains two Github Action workflows that will build this project auto
 Builds on the `Main` branch will ONLY be triggered by manually creating a release using the web interface in the repository. They will be versioned with the tag that is created when the release is created. The tags MUST take the form `major.minor.revision` to be compatible with the build process. A tag like `v0.1.0-alpha` is NOT compatabile and may result in the build process failing.
 
 If you have any questions about the action, contact Andrew Welker or Neil Dorin.
+<!-- START Minimum Essentials Framework Versions -->
+### Minimum Essentials Framework Versions
+
+- 1.8.0
+- 1.8.0
+- 2.16.0
+<!-- END Minimum Essentials Framework Versions -->
+<!-- START Config Example -->
+### Config Example
+
+```json
+{
+    "key": "GeneratedKey",
+    "uid": 1,
+    "name": "GeneratedName",
+    "type": "LgDisplayProperties",
+    "group": "Group",
+    "properties": {
+        "id": "SampleString",
+        "volumeUpperLimit": 0,
+        "volumeLowerLimit": 0,
+        "pollIntervalMs": 0,
+        "coolingTimeMs": "SampleValue",
+        "warmingTimeMs": "SampleValue",
+        "udpSocketKey": "SampleString",
+        "macAddress": "SampleString",
+        "smallDisplay": true,
+        "overrideWol": true,
+        "friendlyNames": [
+            {
+                "inputKey": "SampleString",
+                "name": "SampleString",
+                "hideInput": true
+            }
+        ],
+        "RemoteOnly": true
+    }
+}
+```
+<!-- END Config Example -->
+<!-- START Supported Types -->
+
+<!-- END Supported Types -->
+<!-- START Join Maps -->
+
+<!-- END Join Maps -->
+<!-- START Interfaces Implemented -->
+### Interfaces Implemented
+
+- ISelectableItems<string>
+- IBasicVolumeWithFeedback
+- ICommunicationMonitor
+- IInputHdmi1
+- IInputHdmi2
+- IInputHdmi3
+- IInputHdmi4
+- IInputDisplayPort1
+- IBridgeAdvanced
+- IHasInputs<string>
+- IBasicVideoMuteWithFeedback
+- IWarmingCooling
+- IBasicCommunication
+- IBasicVolumeControls
+- IDPad
+- INumericKeypad
+- ITransport
+- IChannel
+- IColor
+<!-- END Interfaces Implemented -->
+<!-- START Base Classes -->
+### Base Classes
+
+- DisplayControllerJoinMap
+- TwoWayDisplayBase
+- LgDisplayPropertiesConfig
+- DisplayBase
+<!-- END Base Classes -->
+<!-- START Public Methods -->
+### Public Methods
+
+- public void Select()
+- public void SetVolume(ushort level)
+- public void MuteOn()
+- public void MuteOff()
+- public void MuteToggle()
+- public void VolumeDown(bool pressRelease)
+- public void VolumeUp(bool pressRelease)
+- public void VideoMuteOn()
+- public void VideoMuteOff()
+- public void VideoMuteToggle()
+- public void VideoMuteGet()
+- public void LinkToApi(BasicTriList trilist, uint joinStart, string joinMapKey, EiscApiAdvanced bridge)
+- public void SendData(string s)
+- public void ListRoutingInputPorts()
+- public void MuteGet()
+- public void VolumeGet()
+- public void InputHdmi1()
+- public void InputHdmi2()
+- public void InputHdmi3()
+- public void InputHdmi4()
+- public void InputDisplayPort1()
+- public void InputGet()
+- public void PowerGet()
+- public void UpdateInputFb(string s)
+- public void UpdatePowerFb(string s)
+- public void UpdateVideoMuteFb(string s)
+- public void UpdateVolumeFb(string s)
+- public void UpdateMuteFb(string s)
+- public void StatusGet()
+- public string Respond(string line)
+- public void SetPower(bool on)
+- public bool SetInput(string inputCode)
+- public void SetVolume(int level)
+- public void SetMute(bool muted)
+- public string Describe()
+- public void Connect()
+- public void Disconnect()
+- public void SendText(string text)
+- public void SendBytes(byte[] bytes)
+- public void Select()
+- public void LinkToApi(BasicTriList trilist, uint joinStart, string joinMapKey, EiscApiAdvanced bridge)
+- public void SendIrCommand(string cmd)
+- public void PowerOnPress(bool pressRelease)
+- public void PowerOffPress(bool pressRelease)
+- public void PowerTogglePress(bool pressRelease)
+- public void ListRoutingInputPorts()
+- public void InputHdmi1()
+- public void InputHdmi1(bool pressRelease)
+- public void InputHdmi2()
+- public void InputHdmi2(bool pressRelease)
+- public void InputHdmi3()
+- public void InputHdmi3(bool pressRelease)
+- public void InputHdmi4()
+- public void InputHdmi4(bool pressRelease)
+- public void InputTv()
+- public void InputTv(bool pressRelease)
+- public void InputAntenna()
+- public void InputAntenna(bool pressRelease)
+- public void InputNetflix()
+- public void InputNetflix(bool pressRelease)
+- public void InputPrimeVideo()
+- public void InputPrimeVideo(bool pressRelease)
+- public void InputToggle()
+- public void InputToggle(bool pressRelease)
+- public void VolumeUp(bool pressRelease)
+- public void VolumeDown(bool pressRelease)
+- public void MuteToggle()
+- public void Up(bool pressRelease)
+- public void Down(bool pressRelease)
+- public void Left(bool pressRelease)
+- public void Right(bool pressRelease)
+- public void Select(bool pressRelease)
+- public void Menu(bool pressRelease)
+- public void Exit(bool pressRelease)
+- public void Digit0(bool pressRelease)
+- public void Digit1(bool pressRelease)
+- public void Digit2(bool pressRelease)
+- public void Digit3(bool pressRelease)
+- public void Digit4(bool pressRelease)
+- public void Digit5(bool pressRelease)
+- public void Digit6(bool pressRelease)
+- public void Digit7(bool pressRelease)
+- public void Digit8(bool pressRelease)
+- public void Digit9(bool pressRelease)
+- public void KeypadAccessoryButton1(bool pressRelease)
+- public void KeypadAccessoryButton2(bool pressRelease)
+- public void Play(bool pressRelease)
+- public void Pause(bool pressRelease)
+- public void Rewind(bool pressRelease)
+- public void FFwd(bool pressRelease)
+- public void ChapMinus(bool pressRelease)
+- public void ChapPlus(bool pressRelease)
+- public void Stop(bool pressRelease)
+- public void Record(bool pressRelease)
+- public void ChannelUp(bool pressRelease)
+- public void ChannelDown(bool pressRelease)
+- public void LastChannel(bool pressRelease)
+- public void Guide(bool pressRelease)
+- public void Info(bool pressRelease)
+- public void Red(bool pressRelease)
+- public void Green(bool pressRelease)
+- public void Yellow(bool pressRelease)
+- public void Blue(bool pressRelease)
+- public void Home(bool pressRelease)
+- public void Back(bool pressRelease)
+- public void Enter(bool pressRelease)
+<!-- END Public Methods -->
+<!-- START Bool Feedbacks -->
+### Bool Feedbacks
+
+- MuteFeedback
+- VideoMuteIsOn
+<!-- END Bool Feedbacks -->
+<!-- START Int Feedbacks -->
+### Int Feedbacks
+
+- InputNumberFeedback
+- VolumeLevelFeedback
+<!-- END Int Feedbacks -->
+<!-- START String Feedbacks -->
+
+<!-- END String Feedbacks -->
