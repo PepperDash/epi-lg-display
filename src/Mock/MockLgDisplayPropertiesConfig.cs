@@ -3,26 +3,26 @@
 namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
 {
     /// <summary>
-    /// Config for the "lgDisplayMock" type: the real display properties plus an optional "mock" block
+    /// Config for the "mockLgDisplay" type: the real display properties plus an optional "mock" block
     /// </summary>
-    public class LgDisplayMockPropertiesConfig : LgDisplayPropertiesConfig
+    public class MockLgDisplayPropertiesConfig : LgDisplayPropertiesConfig
     {
         /// <summary>
         /// Starting state and behavior of the mock panel
         /// </summary>
         [JsonProperty("mock", NullValueHandling = NullValueHandling.Ignore)]
-        public LgMockOptions Mock { get; set; }
+        public MockLgDisplayOptions Mock { get; set; }
     }
 
     /// <summary>
     /// Starting state and behavior of the mock panel
     /// </summary>
-    public class LgMockOptions
+    public class MockLgDisplayOptions
     {
         /// <summary>
         /// Creates the defaults: panel off, HDMI 1, volume 20, 50ms replies
         /// </summary>
-        public LgMockOptions()
+        public MockLgDisplayOptions()
         {
             Input = "90";
             Volume = 20;

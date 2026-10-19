@@ -7,18 +7,18 @@ using PepperDash.Core;
 namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
 {
     /// <summary>
-    /// "lgmock" console command for driving mock panels by device key
+    /// "mocklg" console command for driving mock panels by device key
     /// </summary>
-    public static class LgMockConsole
+    internal static class MockLgDisplayConsole
     {
         private const string Usage =
-            "lgmock <deviceKey> status | power on|off | input 90|91|92|93|c0 | volume 0-100 | mute on|off | fault none|ng|silent";
+            "mocklg <deviceKey> status | power on|off | input 90|91|92|93|c0 | volume 0-100 | mute on|off | fault none|ng|silent";
 
         // The console rejects help text over 79 bytes; the full usage prints when the command is run without arguments
-        private const string Help = "Mock LG display: lgmock <key> status|power|input|volume|mute|fault";
+        private const string Help = "Mock LG display: mocklg <key> status|power|input|volume|mute|fault";
 
-        private static readonly Dictionary<string, LgMockResponder> Responders =
-            new Dictionary<string, LgMockResponder>(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, MockLgDisplayResponder> Responders =
+            new Dictionary<string, MockLgDisplayResponder>(StringComparer.OrdinalIgnoreCase);
 
         private static readonly object RegisterLock = new object();
         private static bool commandAdded;
@@ -26,7 +26,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
         /// <summary>
         /// Makes a mock panel reachable from the console, adding the command on first use
         /// </summary>
-        public static void Register(string deviceKey, LgMockResponder responder)
+        public static void Register(string deviceKey, MockLgDisplayResponder responder)
         {
             lock (RegisterLock)
             {
@@ -40,11 +40,11 @@ namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
                 // The console command is a convenience: never let it stop the display from loading
                 try
                 {
-                    CrestronConsole.AddNewConsoleCommand(Handle, "lgmock", Help, ConsoleAccessLevelEnum.AccessOperator);
+                    CrestronConsole.AddNewConsoleCommand(Handle, "mocklg", Help, ConsoleAccessLevelEnum.AccessOperator);
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError("Unable to add the lgmock console command: {0}", e.Message);
+                    Debug.LogError("Unable to add the mocklg console command: {0}", e.Message);
                 }
 
                 commandAdded = true;
@@ -56,7 +56,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
             var parts = (args ?? string.Empty).Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
 
             // Mocks can still be registering while the command runs, so read the dictionary under the lock
-            LgMockResponder responder = null;
+            MockLgDisplayResponder responder = null;
             string[] keys;
             lock (RegisterLock)
             {
@@ -101,7 +101,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
                     break;
                 case "fault":
                     ok = arg == "none" || arg == "ng" || arg == "silent";
-                    if (ok) responder.Fault = arg == "ng" ? LgMockFault.Ng : arg == "silent" ? LgMockFault.Silent : LgMockFault.None;
+                    if (ok) responder.Fault = arg == "ng" ? MockLgDisplayFault.Ng : arg == "silent" ? MockLgDisplayFault.Silent : MockLgDisplayFault.None;
                     break;
                 default:
                     ok = false;

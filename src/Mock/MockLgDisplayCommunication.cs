@@ -8,17 +8,17 @@ namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
 {
     /// <summary>
     /// In-process stand-in for the display's serial port. Commands sent by the controller are answered
-    /// by an <see cref="LgMockResponder"/> on a separate thread, like replies from a real port.
+    /// by an <see cref="MockLgDisplayResponder"/> on a separate thread, like replies from a real port.
     /// </summary>
     /// <remarks>
     /// Deliberately not an ISocketStatus: the controller treats a comm without socket status as RS232,
     /// which is what makes it start polling and send power-on without "overrideWol".
     /// </remarks>
-    public class LgMockCommunication : IBasicCommunication
+    internal class MockLgDisplayCommunication : IBasicCommunication
     {
         private static readonly Encoding Latin1 = Encoding.GetEncoding(28591);
 
-        private readonly LgMockResponder responder;
+        private readonly MockLgDisplayResponder responder;
         private readonly GenericQueue replyQueue;
         private readonly int responseDelayMs;
         private readonly object bufferLock = new object();
@@ -27,7 +27,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
         /// <summary>
         /// Creates a mock comm whose replies come from the given responder
         /// </summary>
-        public LgMockCommunication(string key, LgMockResponder responder, int responseDelayMs)
+        public MockLgDisplayCommunication(string key, MockLgDisplayResponder responder, int responseDelayMs)
         {
             Key = key;
             this.responder = responder;

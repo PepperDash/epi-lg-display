@@ -8,7 +8,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
     /// <summary>
     /// How the mock panel misbehaves, for exercising the controller's error paths
     /// </summary>
-    public enum LgMockFault
+    internal enum MockLgDisplayFault
     {
         /// <summary>Answer every command normally</summary>
         None,
@@ -28,7 +28,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
     ///     "{c2} {setId} NG{data}x"   bad data, or the panel is off
     /// All values are hex on the wire.
     /// </remarks>
-    public class LgMockResponder
+    internal class MockLgDisplayResponder
     {
         private const int QueryValue = 0xFF;
         private const int MaxVolume = 0x64;
@@ -54,9 +54,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
         /// <summary>
         /// Creates a responder for the panel with the given set ID
         /// </summary>
-        public LgMockResponder(int setId, LgMockOptions options)
+        public MockLgDisplayResponder(int setId, MockLgDisplayOptions options)
         {
-            options = options ?? new LgMockOptions();
+            options = options ?? new MockLgDisplayOptions();
 
             SetId = setId;
             powerIsOn = options.PowerOn;
@@ -74,7 +74,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
         /// <summary>
         /// Current fault mode
         /// </summary>
-        public LgMockFault Fault { get; set; }
+        public MockLgDisplayFault Fault { get; set; }
 
         /// <summary>
         /// Answers one command line (without the \r delimiter)
@@ -103,12 +103,12 @@ namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
 
             lock (stateLock)
             {
-                if (Fault == LgMockFault.Silent)
+                if (Fault == MockLgDisplayFault.Silent)
                 {
                     return null;
                 }
 
-                var rejected = Fault == LgMockFault.Ng || (CommandsNeedingPower.Contains(command) && !powerIsOn);
+                var rejected = Fault == MockLgDisplayFault.Ng || (CommandsNeedingPower.Contains(command) && !powerIsOn);
                 var result = rejected ? null : Handle(command, value);
 
                 return result == null

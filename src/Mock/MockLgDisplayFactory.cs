@@ -12,14 +12,14 @@ namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
     /// bench-tested without a display. A real config switches to the mock by changing only "type";
     /// any "control" block is ignored.
     /// </summary>
-    public class LgDisplayMockFactory : EssentialsPluginDeviceFactory<LgDisplayController>
+    public class MockLgDisplayFactory : EssentialsPluginDeviceFactory<LgDisplayController>
     {
         /// <summary>
-        /// Registers the "lgDisplayMock" type
+        /// Registers the "mockLgDisplay" type, and "lgDisplayMock" as an alias for configs written before the rename
         /// </summary>
-        public LgDisplayMockFactory()
+        public MockLgDisplayFactory()
         {
-            TypeNames = new List<string> { "lgDisplayMock" };
+            TypeNames = new List<string> { "mockLgDisplay", "lgDisplayMock" };
 
             MinimumEssentialsFrameworkVersion = "1.8.0";
         }
@@ -27,15 +27,15 @@ namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
         /// <inheritdoc />
         public override EssentialsDevice BuildDevice(DeviceConfig dc)
         {
-            var config = (dc.Properties ?? new JObject()).ToObject<LgDisplayMockPropertiesConfig>()
-                         ?? new LgDisplayMockPropertiesConfig();
-            var options = config.Mock ?? new LgMockOptions();
+            var config = (dc.Properties ?? new JObject()).ToObject<MockLgDisplayPropertiesConfig>()
+                         ?? new MockLgDisplayPropertiesConfig();
+            var options = config.Mock ?? new MockLgDisplayOptions();
 
-            var responder = new LgMockResponder(ParseSetId(config.Id), options);
-            var comms = new LgMockCommunication(dc.Key + "-mockComm", responder, options.ResponseDelayMs);
+            var responder = new MockLgDisplayResponder(ParseSetId(config.Id), options);
+            var comms = new MockLgDisplayCommunication(dc.Key + "-mockComm", responder, options.ResponseDelayMs);
 
-            LgMockConsole.Register(dc.Key, responder);
-            Debug.LogInformation("Building mock LG display '{0}' (no hardware). Console: lgmock {0} status", dc.Key);
+            MockLgDisplayConsole.Register(dc.Key, responder);
+            Debug.LogInformation("Building mock LG display '{0}' (no hardware). Console: mocklg {0} status", dc.Key);
 
             return new LgDisplayController(dc.Key, dc.Name, config, comms);
         }
