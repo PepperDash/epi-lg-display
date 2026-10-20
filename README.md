@@ -126,36 +126,60 @@ If you have any questions about the action, contact Andrew Welker or Neil Dorin.
 
 ```json
 {
-    "key": "GeneratedKey",
+    "key": "display-1",
     "uid": 1,
-    "name": "GeneratedName",
-    "type": "LgDisplayProperties",
-    "group": "Group",
+    "name": "Display",
+    "type": "lgDisplay",
+    "group": "display",
     "properties": {
-        "id": "SampleString",
-        "volumeUpperLimit": 0,
+        "id": "01",
+        "volumeUpperLimit": 100,
         "volumeLowerLimit": 0,
-        "pollIntervalMs": 0,
-        "coolingTimeMs": "SampleValue",
-        "warmingTimeMs": "SampleValue",
-        "udpSocketKey": "SampleString",
-        "macAddress": "SampleString",
-        "smallDisplay": true,
-        "overrideWol": true,
+        "pollIntervalMs": 10000,
+        "coolingTimeMs": 10000,
+        "warmingTimeMs": 8000,
+        "smallDisplay": false,
+        "overrideWol": false,
         "friendlyNames": [
             {
-                "inputKey": "SampleString",
-                "name": "SampleString",
+                "inputKey": "90",
+                "name": "HDMI 1",
+                "hideInput": false
+            },
+            {
+                "inputKey": "c0",
+                "name": "DisplayPort",
                 "hideInput": true
             }
         ],
-        "RemoteOnly": true
+        "control": {
+            "method": "com",
+            "controlPortDevKey": "processor",
+            "controlPortNumber": 1,
+            "comParams": {
+                "protocol": "RS232",
+                "baudRate": 9600,
+                "dataBits": 8,
+                "stopBits": 1,
+                "parity": "None",
+                "softwareHandshake": "None",
+                "hardwareHandshake": "None",
+                "pacing": 0
+            }
+        }
     }
 }
 ```
 <!-- END Config Example -->
 <!-- START Supported Types -->
+### Supported Types
 
+- lgDisplay
+- lgPlugin
+- lg
+- lgDisplayIr
+- mockLgDisplay
+- lgDisplayMock
 <!-- END Supported Types -->
 <!-- START Join Maps -->
 
