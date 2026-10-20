@@ -4,7 +4,7 @@ using Crestron.SimplSharp;
 using PepperDash.Core;
 using PepperDash.Essentials.Core.Queues;
 
-namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
+namespace PepperDash.Essentials.Plugins.Lg.Display
 {
     /// <summary>
     /// In-process stand-in for the display's serial port. Commands sent by the controller are answered

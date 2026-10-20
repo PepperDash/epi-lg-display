@@ -4,7 +4,7 @@ using System.Linq;
 using Crestron.SimplSharp;
 using PepperDash.Core;
 
-namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
+namespace PepperDash.Essentials.Plugins.Lg.Display
 {
     /// <summary>
     /// "mocklg" console command for driving mock panels by device key
@@ -38,16 +38,19 @@ namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
                 }
 
                 // The console command is a convenience: never let it stop the display from loading
+                // Only a successful add counts, so the next mock to register retries after a failure.
                 try
                 {
-                    CrestronConsole.AddNewConsoleCommand(Handle, "mocklg", Help, ConsoleAccessLevelEnum.AccessOperator);
+                    commandAdded = CrestronConsole.AddNewConsoleCommand(Handle, "mocklg", Help, ConsoleAccessLevelEnum.AccessOperator);
+                    if (!commandAdded)
+                    {
+                        Debug.LogError("Unable to add the mocklg console command (it may already exist)");
+                    }
                 }
                 catch (Exception e)
                 {
                     Debug.LogError("Unable to add the mocklg console command: {0}", e.Message);
                 }
-
-                commandAdded = true;
             }
         }
 
