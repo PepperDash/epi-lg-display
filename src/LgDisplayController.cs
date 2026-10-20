@@ -1262,6 +1262,10 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     VolumeGet();
                     CrestronEnvironment.Sleep(1500);
                     MuteGet();
+                    // Without this, a screen blanked at the panel (or a panel that boots blanked) never
+                    // reaches VideoMuteIsOn, and the first VideoMuteToggle sends mute-on again
+                    CrestronEnvironment.Sleep(1500);
+                    VideoMuteGet();
                 });
         }
 
