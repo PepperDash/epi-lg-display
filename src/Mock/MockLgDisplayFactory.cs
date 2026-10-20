@@ -5,7 +5,7 @@ using PepperDash.Core;
 using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Config;
 
-namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
+namespace PepperDash.Essentials.Plugins.Lg.Display
 {
     /// <summary>
     /// Builds the real <see cref="LgDisplayController"/> on an in-process mock panel, so a room can be

@@ -1,6 +1,6 @@
 ﻿using Newtonsoft.Json;
 
-namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
+namespace PepperDash.Essentials.Plugins.Lg.Display
 {
     /// <summary>
     /// Config for the "mockLgDisplay" type: the real display properties plus an optional "mock" block

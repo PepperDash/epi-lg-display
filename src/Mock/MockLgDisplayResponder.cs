@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text.RegularExpressions;
 
-namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
+namespace PepperDash.Essentials.Plugins.Lg.Display
 {
     /// <summary>
     /// How the mock panel misbehaves, for exercising the controller's error paths
@@ -74,7 +74,14 @@ namespace PepperDash.Essentials.Plugins.Lg.Display.Mock
         /// <summary>
         /// Current fault mode
         /// </summary>
-        public MockLgDisplayFault Fault { get; set; }
+        // Written by the console thread, read by the reply thread: synchronize both sides
+        private MockLgDisplayFault fault;
+
+        public MockLgDisplayFault Fault
+        {
+            get { lock (stateLock) return fault; }
+            set { lock (stateLock) fault = value; }
+        }
 
         /// <summary>
         /// Answers one command line (without the \r delimiter)
