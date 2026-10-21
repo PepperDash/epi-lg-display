@@ -21,7 +21,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             TypeNames = new List<string> { "mockLgDisplay", "lgDisplayMock" };
 
-            MinimumEssentialsFrameworkVersion = "1.8.0";
+            // Keep equal to the PepperDashEssentials PackageReference version in the csproj: the version
+            // this plugin is compiled against is its minimum
+            MinimumEssentialsFrameworkVersion = "2.16.0";
         }
 
         /// <inheritdoc />
