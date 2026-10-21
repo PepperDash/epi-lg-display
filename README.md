@@ -1,9 +1,11 @@
-# PepperDash Essentials LG Display Plugin (c) 2025
+![PepperDash Essentials Plugin Logo](/images/essentials-plugin-blue.png)
 
 ![PepperDash Essentials](https://img.shields.io/badge/PepperDash%20Essentials-≥%20v2.16.0-blue)
 ![.NET](https://img.shields.io/badge/.NET%20Framework-4.7.2-512BD4)
 ![Crestron](https://img.shields.io/badge/Crestron-4--Series-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
+
+# PepperDash Essentials LG Display Plugin (c) 2025
 
 ## License
 
