@@ -124,8 +124,6 @@ If you have any questions about the action, contact Andrew Welker or Neil Dorin.
 <!-- START Minimum Essentials Framework Versions -->
 ### Minimum Essentials Framework Versions
 
-- 1.8.0
-- 1.8.0
 - 2.16.0
 <!-- END Minimum Essentials Framework Versions -->
 <!-- START Config Example -->
