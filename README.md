@@ -125,66 +125,44 @@ If you have any questions about the action, contact Andrew Welker or Neil Dorin.
 ### Minimum Essentials Framework Versions
 
 - 2.16.0
+- 2.16.0
+- 2.16.0
 <!-- END Minimum Essentials Framework Versions -->
 <!-- START Config Example -->
 ### Config Example
 
 ```json
 {
-    "key": "display-1",
+    "key": "GeneratedKey",
     "uid": 1,
-    "name": "Display",
-    "type": "lgDisplay",
-    "group": "display",
+    "name": "GeneratedName",
+    "type": "LgDisplayProperties",
+    "group": "Group",
     "properties": {
-        "id": "01",
-        "volumeUpperLimit": 100,
+        "id": "SampleString",
+        "volumeUpperLimit": 0,
         "volumeLowerLimit": 0,
-        "pollIntervalMs": 10000,
-        "coolingTimeMs": 10000,
-        "warmingTimeMs": 8000,
-        "smallDisplay": false,
-        "overrideWol": false,
+        "pollIntervalMs": 0,
+        "coolingTimeMs": "SampleValue",
+        "warmingTimeMs": "SampleValue",
+        "udpSocketKey": "SampleString",
+        "macAddress": "SampleString",
+        "smallDisplay": true,
+        "overrideWol": true,
         "friendlyNames": [
             {
-                "inputKey": "90",
-                "name": "HDMI 1",
-                "hideInput": false
-            },
-            {
-                "inputKey": "c0",
-                "name": "DisplayPort",
+                "inputKey": "SampleString",
+                "name": "SampleString",
                 "hideInput": true
             }
         ],
-        "control": {
-            "method": "com",
-            "controlPortDevKey": "processor",
-            "controlPortNumber": 1,
-            "comParams": {
-                "protocol": "RS232",
-                "baudRate": 9600,
-                "dataBits": 8,
-                "stopBits": 1,
-                "parity": "None",
-                "softwareHandshake": "None",
-                "hardwareHandshake": "None",
-                "pacing": 0
-            }
-        }
+        "RemoteOnly": true
     }
 }
 ```
 <!-- END Config Example -->
 <!-- START Supported Types -->
-### Supported Types
 
-- lgDisplay
-- lgPlugin
-- lg
-- lgDisplayIr
-- mockLgDisplay
-- lgDisplayMock
 <!-- END Supported Types -->
 <!-- START Join Maps -->
 
@@ -252,17 +230,16 @@ If you have any questions about the action, contact Andrew Welker or Neil Dorin.
 - public void UpdateVolumeFb(string s)
 - public void UpdateMuteFb(string s)
 - public void StatusGet()
+- public void Connect()
+- public void Disconnect()
+- public void SendText(string text)
+- public void SendBytes(byte[] bytes)
 - public string Respond(string line)
 - public void SetPower(bool on)
 - public bool SetInput(string inputCode)
 - public void SetVolume(int level)
 - public void SetMute(bool muted)
 - public string Describe()
-- public void Connect()
-- public void Disconnect()
-- public void SendText(string text)
-- public void SendBytes(byte[] bytes)
-- public void Select()
 - public void LinkToApi(BasicTriList trilist, uint joinStart, string joinMapKey, EiscApiAdvanced bridge)
 - public void SendIrCommand(string cmd)
 - public void PowerOnPress(bool pressRelease)
@@ -329,6 +306,7 @@ If you have any questions about the action, contact Andrew Welker or Neil Dorin.
 - public void Home(bool pressRelease)
 - public void Back(bool pressRelease)
 - public void Enter(bool pressRelease)
+- public void Select()
 <!-- END Public Methods -->
 <!-- START Bool Feedbacks -->
 ### Bool Feedbacks
