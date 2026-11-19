@@ -9,7 +9,8 @@ public class FactoryMetadataTests
     [Theory]
     [InlineData("LgDisplayControllerFactory")]
     [InlineData("LgDisplayIRFactory")]
-    public void Factory_Sets_MinimumEssentialsFrameworkVersion_To_3_0_0(string factoryClassName)
+    [InlineData("MockLgDisplayFactory")]
+    public void Factory_Sets_MinimumEssentialsFrameworkVersion_To_Pinned_Version(string factoryClassName)
     {
         var content = AssemblyFixture.FindSourceForClass(factoryClassName);
         content.Should().NotBeNull($"source for '{factoryClassName}' should exist");
@@ -17,8 +18,8 @@ public class FactoryMetadataTests
         // Must match the exact PepperDashEssentials version pinned in the csproj, not a bare
         // "3.0.0" (no stable/GA 3.0.0 has shipped; semver ranks a prerelease/RC lower than the
         // plain version, so a mismatched literal can fail the runtime compatibility gate).
-        Regex.IsMatch(content!, @"MinimumEssentialsFrameworkVersion\s*=\s*""3\.0\.0-rc\.1""")
-            .Should().BeTrue($"{factoryClassName} should set MinimumEssentialsFrameworkVersion to \"3.0.0-rc.1\", matching the pinned PackageReference");
+        Regex.IsMatch(content!, @"MinimumEssentialsFrameworkVersion\s*=\s*""3\.0\.0-rc\.20""")
+            .Should().BeTrue($"{factoryClassName} should set MinimumEssentialsFrameworkVersion to \"3.0.0-rc.20\", matching the pinned PackageReference");
     }
 
     [Theory]
@@ -38,6 +39,8 @@ public class FactoryMetadataTests
     [InlineData("LgDisplayControllerFactory", "lgPlugin")]
     [InlineData("LgDisplayControllerFactory", "lg")]
     [InlineData("LgDisplayIRFactory", "lgDisplayIr")]
+    [InlineData("MockLgDisplayFactory", "mockLgDisplay")]
+    [InlineData("MockLgDisplayFactory", "lgDisplayMock")]
     public void Factory_Source_Contains_TypeName(string factoryClassName, string typeName)
     {
         var content = AssemblyFixture.FindSourceForClass(factoryClassName);
@@ -50,7 +53,7 @@ public class FactoryMetadataTests
     public void No_Duplicate_TypeNames_Across_Factories()
     {
         var all = new List<string>();
-        foreach (var factory in new[] { "LgDisplayControllerFactory", "LgDisplayIRFactory" })
+        foreach (var factory in new[] { "LgDisplayControllerFactory", "LgDisplayIRFactory", "MockLgDisplayFactory" })
         {
             var content = AssemblyFixture.FindSourceForClass(factory);
             content.Should().NotBeNull($"source for '{factory}' should exist");
