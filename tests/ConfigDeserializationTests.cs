@@ -120,6 +120,57 @@ public class ConfigDeserializationTests
         friendlyNames![0]["name"]!.Value<string>().Should().Be("Laptop");
     }
 
+    // Property shapes used by deployed lgDisplay configs: RS-232 on a processor COM port, and a TCP
+    // bench variant on the LG network control port 9761 with overrideWol. Every key outside "control"
+    // (which CommFactory consumes) must bind to a [JsonProperty] on LgDisplayPropertiesConfig.
+    private const string ComDeviceJson = """
+        {
+            "control": { "method": "com", "controlPortDevKey": "processor", "controlPortNumber": 1,
+                         "comParams": { "baudRate": 9600, "dataBits": 8, "parity": "None", "stopBits": 1,
+                                        "protocol": "RS232", "hardwareHandshake": "None", "softwareHandshake": "None" } },
+            "id": "01",
+            "pollIntervalMs": 10000,
+            "warmingTimeMs": 8000,
+            "coolingTimeMs": 10000,
+            "friendlyNames": [ { "inputKey": "hdmi1", "name": "HDMI 1", "hideInput": false } ]
+        }
+        """;
+
+    private const string TcpBenchDeviceJson = """
+        {
+            "control": { "method": "tcpip", "tcpSshProperties": { "address": "0.0.0.0", "port": 9761,
+                         "autoReconnect": true, "autoReconnectIntervalMs": 5000 } },
+            "id": "01",
+            "overrideWol": true,
+            "pollIntervalMs": 10000,
+            "warmingTimeMs": 8000,
+            "coolingTimeMs": 10000,
+            "friendlyNames": [ { "inputKey": "hdmi1", "name": "HDMI 1", "hideInput": false } ]
+        }
+        """;
+
+    [Theory]
+    [InlineData(ComDeviceJson)]
+    [InlineData(TcpBenchDeviceJson)]
+    public void Deployed_Config_Shapes_Bind_Every_Property(string json)
+    {
+        var jo = JObject.Parse(json);
+        foreach (var prop in jo.Properties().Where(p => p.Name != "control"))
+        {
+            HasJsonProperty(ConfigType.Value!, prop.Name).Should()
+                .BeTrue($"\"{prop.Name}\" in a deployed lgDisplay config should bind to LgDisplayPropertiesConfig");
+        }
+    }
+
+    [Fact]
+    public void Tcp_Bench_Config_Uses_Port_9761_With_OverrideWol()
+    {
+        var jo = JObject.Parse(TcpBenchDeviceJson);
+        jo["control"]!["tcpSshProperties"]!["port"]!.Value<int>().Should().Be(9761);
+        jo["overrideWol"]!.Value<bool>().Should().BeTrue();
+        ConfigType.Value!.GetProperty("OverrideWol")!.PropertyType.Name.Should().Be("Boolean");
+    }
+
     private static bool HasJsonProperty(Type type, string jsonName) =>
         type.GetProperties().Any(p =>
             p.CustomAttributes.Any(a =>

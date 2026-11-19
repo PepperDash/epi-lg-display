@@ -18,15 +18,16 @@ public class FactoryDiscoveryTests
     }
 
     [Fact]
-    public void Factory_Count_Is_Two()
+    public void Factory_Count_Is_Three()
     {
-        // LgDisplayControllerFactory (network) + LgDisplayIRFactory (IR).
-        AssemblyFixture.FindFactoryTypes().Should().HaveCount(2);
+        // LgDisplayControllerFactory (network/serial) + LgDisplayIRFactory (IR) + MockLgDisplayFactory (bench mock).
+        AssemblyFixture.FindFactoryTypes().Should().HaveCount(3);
     }
 
     [Theory]
     [InlineData("LgDisplayControllerFactory")]
     [InlineData("LgDisplayIRFactory")]
+    [InlineData("MockLgDisplayFactory")]
     public void Factory_Exists_ByName(string factoryClassName)
     {
         AssemblyFixture.FindFactoryTypes()
