@@ -21,6 +21,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Pure decision logic with no Crestron dependency, compiled straight into the tests. -->
+    <Compile Include="..\src\LgCommandQueue.cs" Link="LgCommandQueue.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Builds the plugin before tests run; DLL is loaded via MetadataLoadContext, not referenced. -->
     <ProjectReference Include="..\src\epi-display-lg.4Series.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
