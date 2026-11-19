@@ -30,6 +30,12 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         [JsonProperty("macAddress")]
         public string macAddress { get; set; }
 
+        [JsonProperty("wolBroadcastAddress")]
+        public string WolBroadcastAddress { get; set; }
+
+        [JsonProperty("wolPort")]
+        public ushort? WolPort { get; set; }
+
         [JsonProperty("smallDisplay")]
         public bool SmallDisplay { get; set; }
 

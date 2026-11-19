@@ -5,6 +5,7 @@ using Crestron.SimplSharp;
 using Crestron.SimplSharpPro.DeviceSupport;
 using Epi.Display.Lg;
 using PepperDash.Core;
+using PepperDash.Core.Logging;
 using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges;
 using PepperDash.Essentials.Core.DeviceTypeInterfaces;
@@ -67,14 +68,14 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             this.propertiesConfig = config;
             if (propertiesConfig == null)
             {
-                Debug.LogError(this, "Display configuration must be included");
+                this.LogError("Display configuration must be included");
                 return;
             }
 
             this.irController = irController;
             if (this.irController == null)
             {
-                Debug.LogError(this, "IrOutputPortController instance must be included");
+                this.LogError("IrOutputPortController instance must be included");
                 return;
             }
 
@@ -107,8 +108,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 joinMap.SetCustomJoinData(customJoins);
             }
 
-            Debug.LogInformation(this, "Linking to Trilist '{0}'", trilist.ID.ToString("X"));
-            Debug.LogInformation(this, "Linking to Bridge Type {0}", GetType().Name);
+            this.LogInformation("Linking to Trilist '{TrilistId}'", trilist.ID.ToString("X"));
+            this.LogInformation("Linking to Bridge Type {BridgeType}", GetType().Name);
 
             // links to bridge
             // device name
@@ -167,7 +168,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             if (string.IsNullOrEmpty(cmd))
             {
-                Debug.LogError(this, "SendIrCommand: ir command is null or empty");
+                this.LogError("SendIrCommand: ir command is null or empty");
                 return;
             }
 
@@ -226,9 +227,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             var resolved = IrStandardCommands.Resolve(cmd);
 
             if (!string.Equals(resolved, cmd, StringComparison.Ordinal))
-                Debug.LogVerbose(this, "SendIrCommand: resolved selector '{0}' to ir command '{1}'", cmd, resolved);
+                this.LogVerbose("SendIrCommand: resolved selector '{Selector}' to ir command '{Command}'", cmd, resolved);
 
-            Debug.LogInformation(this, "SendIrCommand: ir command '{0}'", resolved);
+            this.LogInformation("SendIrCommand: ir command '{Command}'", resolved);
 
             irController?.PressRelease(resolved, true);
             irController?.PressRelease(resolved, false);
@@ -317,7 +318,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             if (!propertiesConfig.RemoteOnly) return false;
 
-            Debug.LogDebug(this, "{0} suppressed: remoteOnly is set, so the paired display driver owns power", caller);
+            this.LogDebug("{Caller} suppressed: remoteOnly is set, so the paired display driver owns power", caller);
             return true;
         }
 
@@ -421,7 +422,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             foreach (var inputPort in InputPorts)
             {
-                Debug.LogVerbose(this, "ListRoutingInputPorts: key-'{0}', connectionType-'{1}', feedbackMatchObject-'{2}'",
+                this.LogVerbose("ListRoutingInputPorts: key-'{Key}', connectionType-'{ConnectionType}', feedbackMatchObject-'{FeedbackMatchObject}'",
                     inputPort.Key, inputPort.ConnectionType, inputPort.FeedbackMatchObject);
             }
         }
@@ -488,15 +489,15 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 // and stop the device from being created.
                 if (item == null)
                 {
-                    Debug.LogError(this, "UpdateInputFriendlyNames: null entry; skipping");
+                    this.LogError("UpdateInputFriendlyNames: null entry; skipping");
                     continue;
                 }
 
-                Debug.LogInformation(this, $"UpdateInputFriendlyNames: key '{item.InputKey}', name '{item.Name}', hideInput '{item.HideInput}'");
+                this.LogInformation("UpdateInputFriendlyNames: key '{InputKey}', name '{Name}', hideInput '{HideInput}'", item.InputKey, item.Name, item.HideInput);
 
                 if (string.IsNullOrEmpty(item.InputKey))
                 {
-                    Debug.LogError(this, "UpdateInputFriendlyNames: InputKey is null or empty");
+                    this.LogError("UpdateInputFriendlyNames: InputKey is null or empty");
                     continue;
                 }
 
@@ -517,7 +518,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputHdmi1()
         {
-            Debug.LogInformation(this, "InputHdmi1: ir command '{0}'", IrStandardCommands.InputHdmi1);
+            this.LogInformation("InputHdmi1: ir command '{Command}'", IrStandardCommands.InputHdmi1);
             SendIrCommand(IrStandardCommands.InputHdmi1);
         }
 
@@ -536,7 +537,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputHdmi2()
         {
-            Debug.LogInformation(this, "InputHdmi2: ir command '{0}'", IrStandardCommands.InputHdmi2);
+            this.LogInformation("InputHdmi2: ir command '{Command}'", IrStandardCommands.InputHdmi2);
             SendIrCommand(IrStandardCommands.InputHdmi2);
         }
 
@@ -555,7 +556,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputHdmi3()
         {
-            Debug.LogInformation(this, "InputHdmi3: ir command '{0}'", IrStandardCommands.InputHdmi3);
+            this.LogInformation("InputHdmi3: ir command '{Command}'", IrStandardCommands.InputHdmi3);
             SendIrCommand(IrStandardCommands.InputHdmi3);
         }
 
@@ -574,7 +575,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputHdmi4()
         {
-            Debug.LogInformation(this, "InputHdmi4: ir command '{0}'", IrStandardCommands.InputHdmi4);
+            this.LogInformation("InputHdmi4: ir command '{Command}'", IrStandardCommands.InputHdmi4);
             SendIrCommand(IrStandardCommands.InputHdmi4);
         }
 
@@ -593,7 +594,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputTv()
         {
-            Debug.LogInformation(this, "InputTv: ir command '{0}'", IrStandardCommands.InputTv);
+            this.LogInformation("InputTv: ir command '{Command}'", IrStandardCommands.InputTv);
             SendIrCommand(IrStandardCommands.InputTv);
         }
 
@@ -612,7 +613,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputAntenna()
         {
-            Debug.LogInformation(this, "InputAntenna: ir command '{0}'", IrStandardCommands.InputAntenna);
+            this.LogInformation("InputAntenna: ir command '{Command}'", IrStandardCommands.InputAntenna);
             SendIrCommand(IrStandardCommands.InputAntenna);
         }
 
@@ -631,7 +632,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputNetflix()
         {
-            Debug.LogInformation(this, "InputNetflix: ir command '{0}'", IrStandardCommands.Netflix);
+            this.LogInformation("InputNetflix: ir command '{Command}'", IrStandardCommands.Netflix);
             SendIrCommand(IrStandardCommands.Netflix);
         }
 
@@ -650,7 +651,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public void InputPrimeVideo()
         {
-            Debug.LogInformation(this, "InputPrimeVideo: ir command '{0}'", IrStandardCommands.PrimeVideo);
+            this.LogInformation("InputPrimeVideo: ir command '{Command}'", IrStandardCommands.PrimeVideo);
             SendIrCommand(IrStandardCommands.PrimeVideo);
         }
 
@@ -666,7 +667,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         public void InputToggle()
         {
-            Debug.LogInformation(this, "InputToggle: ir command '{0}'", IrStandardCommands.InputToggle);
+            this.LogInformation("InputToggle: ir command '{Command}'", IrStandardCommands.InputToggle);
             SendIrCommand(IrStandardCommands.InputToggle);
         }
 
@@ -682,7 +683,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// <param name="selector"></param>
         public override void ExecuteSwitch(object selector)
         {
-            Debug.LogInformation(this, $"ExecuteSwitch: selector '{selector}' type '{selector?.GetType().Name ?? "null"}'");
+            this.LogInformation("ExecuteSwitch: selector '{Selector}' type '{SelectorType}'", selector, selector?.GetType().Name ?? "null");
 
 
 
@@ -693,7 +694,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 cmd = port.FeedbackMatchObject as string;
                 if (string.IsNullOrEmpty(cmd))
                 {
-                    Debug.LogError(this, "ExecuteSwitch: command not found for input port '{0}'", port.Key);
+                    this.LogError("ExecuteSwitch: command not found for input port '{Key}'", port.Key);
                     return;
                 }
             }
@@ -702,7 +703,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 cmd = strCmd;
                 if (string.IsNullOrEmpty(cmd))
                 {
-                    Debug.LogError(this, "ExecuteSwitch: selector is null or empty");
+                    this.LogError("ExecuteSwitch: selector is null or empty");
                     return;
                 }
             }
@@ -719,7 +720,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 cmd = selector?.ToString();
                 if (string.IsNullOrEmpty(cmd))
                 {
-                    Debug.LogError(this, "ExecuteSwitch: selector is null or empty");
+                    this.LogError("ExecuteSwitch: selector is null or empty");
                     return;
                 }
             }
@@ -733,7 +734,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             if (propertiesConfig.RemoteOnly)
             {
                 Transmit(cmd);
-                Debug.LogDebug(this, "ExecuteSwitch: remoteOnly is set, skipping the implicit PowerOn and warmup re-send");
+                this.LogDebug("ExecuteSwitch: remoteOnly is set, skipping the implicit PowerOn and warmup re-send");
                 return;
             }
 
@@ -762,7 +763,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             if (pressRelease) return;
 
-            Debug.LogInformation(this, "VolumeUp: ir command '{0}'", IrStandardCommands.VolumeUp);
+            this.LogInformation("VolumeUp: ir command '{Command}'", IrStandardCommands.VolumeUp);
             SendIrCommand(IrStandardCommands.VolumeUp);
         }
 
@@ -770,13 +771,13 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             if (pressRelease) return;
 
-            Debug.LogInformation(this, "VolumeDown: ir command '{0}'", IrStandardCommands.VolumeDown);
+            this.LogInformation("VolumeDown: ir command '{Command}'", IrStandardCommands.VolumeDown);
             SendIrCommand(IrStandardCommands.VolumeDown);
         }
 
         public void MuteToggle()
         {
-            Debug.LogInformation(this, "MuteToggle: ir command '{0}'", IrStandardCommands.MuteToggle);
+            this.LogInformation("MuteToggle: ir command '{Command}'", IrStandardCommands.MuteToggle);
             SendIrCommand(IrStandardCommands.MuteToggle);
         }
 

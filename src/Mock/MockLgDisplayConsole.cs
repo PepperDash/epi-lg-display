@@ -49,7 +49,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError("Unable to add the mocklg console command: {0}", e.Message);
+                    Debug.LogError(e, "Unable to add the mocklg console command: {Message}", e.Message);
                 }
             }
         }

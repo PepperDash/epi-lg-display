@@ -12,14 +12,13 @@ using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges;
 using PepperDash.Essentials.Core.DeviceTypeInterfaces;
 using PepperDash.Essentials.Core.Queues;
-using PepperDash.Essentials.Devices.Displays;
 using TwoWayDisplayBase = PepperDash.Essentials.Devices.Common.Displays.TwoWayDisplayBase;
 
 
 namespace PepperDash.Essentials.Plugins.Lg.Display
 {
     public class LgDisplayController : TwoWayDisplayBase, IBasicVolumeWithFeedback, ICommunicationMonitor,
-        IInputHdmi1, IInputHdmi2, IInputHdmi3, IInputHdmi4, IInputDisplayPort1, IBridgeAdvanced, IHasInputs<string>, IBasicVideoMuteWithFeedback, IWarmingCooling
+        IBridgeAdvanced, IHasInputs<string>, IBasicVideoMuteWithFeedback, IWarmingCooling
     {
         GenericQueue receiveQueue;
         public const int InputPowerOn = 101;
@@ -34,8 +33,13 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         private bool isMuted;
         private bool isSerialComm;
         private bool isWarmingUp;
-        private bool inputSwitchPending;
-        private bool powerOnPending;
+        // One pending power slot and one pending input slot; the latest request wins. Held commands
+        // are applied when the warm-up / cool-down timers finish, and a held input after the settle
+        // delay. Every access goes through queueLock: timers and callers run on different threads.
+        private readonly object queueLock = new object();
+        private readonly LgCommandQueue<Action> commandQueue = new LgCommandQueue<Action>();
+        private System.Timers.Timer inputSettleTimer;
+        private const int InputSettleMs = 1000; // delay after warm-up before switching input
         private string lastCommandPrefix;
         // Commands already re-polled after an NG; only touched on the receive queue's thread
         private readonly HashSet<string> ngRetriedCommands = new HashSet<string>();
@@ -47,7 +51,10 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         private ushort volumeLevelForSig;
         private readonly bool smallDisplay;
         private readonly bool overrideWol;
-        //private GenericUdpServer _woLServer;
+        private readonly string wolBroadcastAddress;
+        private readonly string wolMacAddress;
+        private readonly ushort wolPort;
+        private GenericUdpServer wolServer;
         private readonly LgDisplayPropertiesConfig config;
 
 
@@ -62,7 +69,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             var props = config;
             if (props == null)
             {
-                Debug.LogError(this, "Display configuration must be included");
+                this.LogError("Display configuration must be included");
                 return;
             }
             smallDisplay = props.SmallDisplay;
@@ -70,10 +77,12 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             upperLimit = props.volumeUpperLimit;
             lowerLimit = props.volumeLowerLimit;
             overrideWol = props.OverrideWol;
+            wolMacAddress = props.macAddress;
+            wolBroadcastAddress = props.WolBroadcastAddress;
+            wolPort = props.WolPort ?? 9;
             pollIntervalMs = props.pollIntervalMs > 1999 ? props.pollIntervalMs : 10000;
             coolingTimeMs = props.coolingTimeMs > 0 ? props.coolingTimeMs : 10000;
             warmingTimeMs = props.warmingTimeMs > 0 ? props.warmingTimeMs : 8000;
-            //UdpSocketKey = props.udpSocketKey;
 
             InputNumberFeedback = new IntFeedback(() =>
             {
@@ -114,15 +123,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
                 if (isWarmingUp)
                 {
-                    WarmupTimer = new CTimer(o =>
-                    {
-                        IsWarmingUp = false;
-
-                        if (!inputSwitchPending)
-                        {
-                            InputGet();
-                        }
-                    }, WarmupTime);
+                    WarmupTimer = new System.Timers.Timer(WarmupTime) { AutoReset = false };
+                    WarmupTimer.Elapsed += OnWarmupTimerElapsed;
+                    WarmupTimer.Start();
                 }
                 else if (WarmupTimer != null)
                 {
@@ -146,7 +149,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
                 if (isCoolingDown)
                 {
-                    CooldownTimer = new CTimer(o => { IsCoolingDown = false; }, CooldownTime);
+                    CooldownTimer = new System.Timers.Timer(CooldownTime) { AutoReset = false };
+                    CooldownTimer.Elapsed += OnCooldownTimerElapsed;
+                    CooldownTimer.Start();
                 }
                 else if (CooldownTimer != null)
                 {
@@ -382,8 +387,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 joinMap.SetCustomJoinData(customJoins);
             }
 
-            Debug.LogInformation(this, "Linking to Trilist '{0}'", trilist.ID.ToString("X"));
-            Debug.LogInformation(this, "Linking to Bridge Type {0}", GetType().Name);
+            this.LogInformation("Linking to Trilist '{TrilistId}'", trilist.ID.ToString("X"));
+            this.LogInformation("Linking to Bridge Type {BridgeType}", GetType().Name);
 
             // links to bridge
             // device name
@@ -445,7 +450,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 InputNumberFeedback.LinkInputSig(trilist.UShortInput[joinMap.InputSelect.JoinNumber]);
 
             if (CurrentInputFeedback != null)
-                CurrentInputFeedback.OutputChange += (sender, args) => Debug.LogDebug(this, "CurrentInputFeedback: {0}", args.StringValue);
+                CurrentInputFeedback.OutputChange += (sender, args) => this.LogDebug("CurrentInputFeedback: {Value}", args.StringValue);
 
             // bridge online change
             trilist.OnlineStatusChange += (sender, args) =>
@@ -503,7 +508,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             if (socket != null)
             {
                 //This Instance Uses IP Control
-                Debug.LogVerbose(this, "The LG Display Plugin does NOT support IP Control currently");
+                this.LogVerbose("The LG Display Plugin does NOT support IP Control currently");
             }
             else
             {
@@ -567,11 +572,11 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             SetupInputs();
         }
 
-        public override bool CustomActivate()
+        protected override bool CustomActivate()
         {
             Communication.Connect();
 
-            if (isSerialComm || overrideWol)
+            if (isSerialComm || overrideWol || HasWakeOnLanConfiguration)
             {
                 CommunicationMonitor.Start();
             }
@@ -693,7 +698,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 // answering NG would otherwise loop query -> NG -> query with no delay.
                 if (!ngRetriedCommands.Add(command))
                 {
-                    this.LogVerbose("Repeated NG for command '{0}'; waiting for the next poll", command);
+                    this.LogVerbose("Repeated NG for command '{Command}'; waiting for the next poll", command);
                     return;
                 }
 
@@ -756,7 +761,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
             catch (Exception e)
             {
-                Debug.LogError(this, "Failed to normalize device ID '{0}': {1}", deviceId, e.Message);
+                this.LogError("Failed to normalize device ID '{DeviceId}': {Error}", deviceId, e.Message);
                 return deviceId; // Return original if parsing fails
             }
         }
@@ -903,7 +908,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         }
 
         /// <summary>
-        /// Executes a switch, turning on display if necessary.
+        /// Executes a switch, turning on display if necessary. When the panel is on the input is
+        /// sent at once; otherwise it replaces any pending input and is sent once the panel is
+        /// ready, and the panel is asked to power on.
         /// </summary>
         /// <param name="selector"></param>
         public override void ExecuteSwitch(object selector)
@@ -914,123 +921,180 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 return;
             }
 
-            this.LogVerbose("ExecuteSwitch: preparing to execute {0}", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
+            var actionName = action.Method.DeclaringType?.Name + "." + action.Method.Name;
 
-            inputSwitchPending = true;
-
-            if (PowerIsOn)
+            lock (queueLock)
             {
-                try
+                var state = CurrentPanelState;
+                var decision = commandQueue.RequestInput(action, state);
+
+                if (decision.SendInputNow)
                 {
+                    this.LogVerbose("ExecuteSwitch: executing {0}", actionName);
                     action();
+                    return;
                 }
-                finally
-                {
-                    inputSwitchPending = false;
-                }
-            }
-            else if (IsCoolingDown)
-            {
-                this.LogVerbose("ExecuteSwitch: Device is cooling down. Powering on and executing {0} after cooldown.", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
-                CrestronInvoke.BeginInvoke((o) =>
-                {
-                    try
-                    {
-                        CrestronEnvironment.Sleep((int)CooldownTime);
 
-                        this.LogVerbose("ExecuteSwitch: Cooldown complete. Sending power on.");
-                        SendPowerOn();
-
-                        CrestronEnvironment.Sleep((int)WarmupTime + 1000); // warmup time + 1000 for input switching delay                    
-
-                        this.LogVerbose("ExecuteSwitch: Warmup complete. Executing {0}.", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
-                        action();
-                    }
-                    finally
-                    {
-                        inputSwitchPending = false;
-                    }
-                });
-            }
-            else
-            {
-                this.LogVerbose("ExecuteSwitch: Power is off. Powering on and executing {0} after warmup.", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
-                PowerOn();
-                CrestronInvoke.BeginInvoke((o) =>
-                {
-                    try
-                    {
-                        CrestronEnvironment.Sleep((int)WarmupTime + 1000); // warmup time + 1000 for input switching delay                    
-
-                        this.LogVerbose("ExecuteSwitch: Warmup complete. Executing {0}.", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
-                        action();
-                    }
-                    finally
-                    {
-                        inputSwitchPending = false;
-                    }
-                });
+                this.LogVerbose("ExecuteSwitch: panel is {State}; {Input} is pending until the panel is ready", state, actionName);
+                ApplyPowerCommand(decision.PowerToSend);
             }
         }
 
-
         /// <summary>
-        /// Set Power On For Device
+        /// Set Power On For Device. While cooling down the request is held and sent when cool-down
+        /// ends; while warming up it cancels a pending power off and sends nothing.
         /// </summary>
         public override void PowerOn()
         {
-            if (IsCoolingDown)
+            lock (queueLock)
             {
-                if (powerOnPending) return;
-
-                powerOnPending = true;
-                CrestronInvoke.BeginInvoke((o) =>
+                var state = CurrentPanelState;
+                var command = commandQueue.RequestPower(true, state);
+                if (command == LgPowerCommand.None)
                 {
-                    try
-                    {
-                        this.LogVerbose("PowerOn: Device is cooling down. Powering on after cooldown completes.");
-
-                        CrestronEnvironment.Sleep((int)CooldownTime);
-
-                        this.LogVerbose("PowerOn: Cooldown complete. Powering on.");
-                        SendPowerOn();
-                    }
-                    finally
-                    {
-                        powerOnPending = false;
-                    }
-                });
-                return;
+                    this.LogVerbose("PowerOn: panel is {State}; pending power is now {Pending}", state, commandQueue.PendingPower);
+                }
+                ApplyPowerCommand(command);
             }
-
-            SendPowerOn();
         }
 
         /// <summary>
-        /// Set Power Off for Device
+        /// Set Power Off for Device. While warming up the request is held and sent when warm-up
+        /// ends; while cooling down it cancels a pending power on and sends nothing.
         /// </summary>
         public override void PowerOff()
         {
-            if (IsWarmingUp)
+            lock (queueLock)
             {
-                CrestronInvoke.BeginInvoke((o) =>
+                var state = CurrentPanelState;
+                var command = commandQueue.RequestPower(false, state);
+                if (command == LgPowerCommand.None)
                 {
-                    this.LogVerbose("PowerOff: Device is warming up. Powering off after warmup completes.");
-
-                    CrestronEnvironment.Sleep((int)WarmupTime);
-
-                    this.LogVerbose("PowerOff: Warmup complete. Powering off.");
-                    SendPowerOff();
-                });
-                return;
+                    this.LogVerbose("PowerOff: panel is {State}; pending power is now {Pending}", state, commandQueue.PendingPower);
+                }
+                ApplyPowerCommand(command);
             }
+        }
 
-            SendPowerOff();
+        private LgPanelState CurrentPanelState
+        {
+            get
+            {
+                if (IsWarmingUp) return LgPanelState.WarmingUp;
+                if (IsCoolingDown) return LgPanelState.CoolingDown;
+                return PowerIsOn ? LgPanelState.On : LgPanelState.Off;
+            }
+        }
+
+        // Caller holds queueLock.
+        private void ApplyPowerCommand(LgPowerCommand command)
+        {
+            switch (command)
+            {
+                case LgPowerCommand.On:
+                    SendPowerOn();
+
+                    // No warm-up window was started (Wake-on-LAN only, or the panel already reports
+                    // on), so nothing will end one: release a pending input after the full delay.
+                    if (!IsWarmingUp && commandQueue.HasPendingInput)
+                    {
+                        StartInputSettleTimer((int)WarmupTime + InputSettleMs);
+                    }
+                    break;
+
+                case LgPowerCommand.Off:
+                    StopInputSettleTimer();
+                    SendPowerOff();
+                    break;
+            }
+        }
+
+        private void OnWarmupTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
+        {
+            lock (queueLock)
+            {
+                // Ignore a stale timer (warm-up was cancelled or restarted while this was queued)
+                if (!ReferenceEquals(sender, WarmupTimer)) return;
+
+                IsWarmingUp = false;
+
+                var command = commandQueue.WarmupComplete();
+                if (command == LgPowerCommand.Off)
+                {
+                    this.LogVerbose("Warm-up complete. Sending the pending power off.");
+                    ApplyPowerCommand(command);
+                    return;
+                }
+
+                if (commandQueue.HasPendingInput)
+                {
+                    StartInputSettleTimer(InputSettleMs);
+                }
+                else
+                {
+                    InputGet();
+                }
+            }
+        }
+
+        private void OnCooldownTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
+        {
+            lock (queueLock)
+            {
+                if (!ReferenceEquals(sender, CooldownTimer)) return;
+
+                IsCoolingDown = false;
+
+                var command = commandQueue.CooldownComplete();
+                if (command == LgPowerCommand.On)
+                {
+                    this.LogVerbose("Cool-down complete. Sending the pending power on.");
+                    ApplyPowerCommand(command);
+                }
+            }
+        }
+
+        // Caller holds queueLock.
+        private void StartInputSettleTimer(int delayMs)
+        {
+            StopInputSettleTimer();
+
+            inputSettleTimer = new System.Timers.Timer(delayMs) { AutoReset = false };
+            inputSettleTimer.Elapsed += OnInputSettleTimerElapsed;
+            inputSettleTimer.Start();
+        }
+
+        // Caller holds queueLock.
+        private void StopInputSettleTimer()
+        {
+            if (inputSettleTimer == null) return;
+
+            inputSettleTimer.Stop();
+            inputSettleTimer.Dispose();
+            inputSettleTimer = null;
+        }
+
+        private void OnInputSettleTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
+        {
+            lock (queueLock)
+            {
+                if (!ReferenceEquals(sender, inputSettleTimer)) return;
+
+                StopInputSettleTimer();
+
+                var action = commandQueue.TakeReadyInput(CurrentPanelState);
+                if (action == null) return;
+
+                this.LogVerbose("Panel ready. Executing pending input {0}.", action.Method.DeclaringType?.Name + "." + action.Method.Name);
+                action();
+            }
         }
 
         private void SendPowerOn()
         {
             var powerCommandSent = false;
+
+            SendWakeOnLan();
 
             if (isSerialComm || overrideWol)
             {
@@ -1141,7 +1205,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
             catch (Exception e)
             {
-                Debug.LogVerbose(this, "Unable to parse {0} to Int32 {1}", s, e);
+                this.LogVerbose("Unable to parse {Value} to Int32 {Error}", s, e);
             }
         }
 
@@ -1177,7 +1241,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
             catch (Exception e)
             {
-                Debug.LogVerbose(this, "Error updating volumefb for value: {1}: {0}", e, s);
+                this.LogVerbose("Error updating volumefb for value: {Value}: {Error}", s, e);
             }
         }
 
@@ -1202,7 +1266,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
             catch (Exception e)
             {
-                Debug.LogVerbose(this, "Unable to parse {0} to Int32 {1}", s, e);
+                this.LogVerbose("Unable to parse {Value} to Int32 {Error}", s, e);
             }
         }
 
@@ -1216,7 +1280,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             {
                 if (data < 0 || data >= inputFeedback.Count)
                 {
-                    Debug.LogVerbose(this, "Input index {0} out of range for _inputFeedback (size {1})", data, inputFeedback.Count);
+                    this.LogVerbose("Input index {Index} out of range for _inputFeedback (size {Size})", data, inputFeedback.Count);
                     return;
                 }
 
@@ -1239,7 +1303,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
             catch (Exception e)
             {
-                Debug.LogError(this, "{0}", e.Message);
+                this.LogError("{Error}", e.Message);
             }
         }
 
@@ -1270,40 +1334,51 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         }
 
 
-        private void WolFunction(string macAddress)
+        private bool HasWakeOnLanConfiguration =>
+            !string.IsNullOrWhiteSpace(wolMacAddress) &&
+            !string.IsNullOrWhiteSpace(wolBroadcastAddress);
+
+        private void SendWakeOnLan()
         {
-            if (Regex.IsMatch(macAddress, @"^([0-9A-Fa-f]{2}[\.:-]){5}([0-9A-Fa-f]{2})$") ||
-                Regex.IsMatch(macAddress, @"^([0-9A-Fa-f]{12})"))
+            if (!HasWakeOnLanConfiguration)
             {
-                var address = Regex.Replace(macAddress, @"(-|:|\.)", "").ToLower();
-
-                var counter = 0;
-
-                var bytes = new byte[1024];
-
-                //Packet starts with 6 iterations of 0xFF
-                for (var i = 0; i < 6; i++)
-                {
-                    bytes[counter++] = 0xFF;
-                }
-
-                //Packet has 16 iterations of the mac address
-                for (var y = 0; y < 16; y++)
-                {
-                    var i = 0;
-                    for (var z = 0; z < 6; z++)
-                    {
-                        bytes[counter++] =
-                            byte.Parse(address.Substring(i, 2),
-                                NumberStyles.HexNumber);
-                        i += 2;
-                    }
-                }
+                this.LogWarning("Wake-on-LAN skipped: macAddress configured={HasMacAddress}, wolBroadcastAddress configured={HasBroadcastAddress}",
+                    !string.IsNullOrWhiteSpace(wolMacAddress), !string.IsNullOrWhiteSpace(wolBroadcastAddress));
                 return;
             }
 
-            Debug.LogVerbose(this, "Invalid MAC Address sent to WolFunction - {0}", macAddress);
-            throw new ArgumentException("Invalid MAC Address");
+            var normalizedMacAddress = Regex.Replace(wolMacAddress, @"[-:.]", string.Empty);
+            if (!Regex.IsMatch(normalizedMacAddress, @"^[0-9A-Fa-f]{12}$"))
+            {
+                this.LogWarning("Wake-on-LAN is configured with an invalid MAC address: {MacAddress}", wolMacAddress);
+                return;
+            }
+
+            var macAddressBytes = Enumerable.Range(0, 6)
+                .Select(index => byte.Parse(normalizedMacAddress.Substring(index * 2, 2), NumberStyles.HexNumber))
+                .ToArray();
+            var magicPacket = new byte[102];
+
+            for (var index = 0; index < 6; index++)
+                magicPacket[index] = 0xFF;
+
+            for (var index = 6; index < magicPacket.Length; index += macAddressBytes.Length)
+                Buffer.BlockCopy(macAddressBytes, 0, magicPacket, index, macAddressBytes.Length);
+
+            wolServer ??= new GenericUdpServer(Key + "-wol", wolBroadcastAddress, wolPort, magicPacket.Length);
+            if (!wolServer.IsConnected)
+                wolServer.Connect();
+
+            if (!wolServer.IsConnected)
+            {
+                this.LogError("Wake-on-LAN UDP socket could not connect to {BroadcastAddress}:{Port}", wolBroadcastAddress, wolPort);
+                return;
+            }
+
+            for (var attempt = 0; attempt < 3; attempt++)
+                wolServer.SendBytes(magicPacket);
+
+            this.LogInformation("Wake-on-LAN magic packets sent to {BroadcastAddress}:{Port}", wolBroadcastAddress, wolPort);
         }
     }
 }

@@ -23,7 +23,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
             // Keep equal to the PepperDashEssentials PackageReference version in the csproj: the version
             // this plugin is compiled against is its minimum
-            MinimumEssentialsFrameworkVersion = "2.16.0";
+            MinimumEssentialsFrameworkVersion = "3.0.0";
         }
 
         /// <inheritdoc />
@@ -37,7 +37,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             var comms = new MockLgDisplayCommunication(dc.Key + "-mockComm", responder, options.ResponseDelayMs);
 
             MockLgDisplayConsole.Register(dc.Key, responder);
-            Debug.LogInformation("Building mock LG display '{0}' (no hardware). Console: mocklg {0} status", dc.Key);
+            Debug.LogInformation("Building mock LG display '{Key}' (no hardware). Console: mocklg {Key} status", dc.Key, dc.Key);
 
             return new LgDisplayController(dc.Key, dc.Name, config, comms);
         }
