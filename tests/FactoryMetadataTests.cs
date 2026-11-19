@@ -15,11 +15,12 @@ public class FactoryMetadataTests
         var content = AssemblyFixture.FindSourceForClass(factoryClassName);
         content.Should().NotBeNull($"source for '{factoryClassName}' should exist");
 
-        // Must match the exact PepperDashEssentials version pinned in the csproj, not a bare
-        // "3.0.0" (no stable/GA 3.0.0 has shipped; semver ranks a prerelease/RC lower than the
-        // plain version, so a mismatched literal can fail the runtime compatibility gate).
-        Regex.IsMatch(content!, @"MinimumEssentialsFrameworkVersion\s*=\s*""3\.0\.0-rc\.20""")
-            .Should().BeTrue($"{factoryClassName} should set MinimumEssentialsFrameworkVersion to \"3.0.0-rc.20\", matching the pinned PackageReference");
+        // Must be the plain numeric core of the pinned PackageReference (3.0.0-rc.20 -> "3.0.0").
+        // The Essentials plugin loader parses this with System.Version; a prerelease suffix such as
+        // "-rc.20" fails to parse and the loader skips the plugin entirely
+        // (Global.IsRunningMinimumVersionOrHigher, Essentials 3.1.4).
+        Regex.IsMatch(content!, @"MinimumEssentialsFrameworkVersion\s*=\s*""3\.0\.0""")
+            .Should().BeTrue($"{factoryClassName} should set MinimumEssentialsFrameworkVersion to \"3.0.0\" (no prerelease suffix, or the plugin won't load)");
     }
 
     [Theory]
