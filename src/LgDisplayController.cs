@@ -37,6 +37,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         private bool inputSwitchPending;
         private bool powerOnPending;
         private string lastCommandPrefix;
+        // Commands already re-polled after an NG; only touched on the receive queue's thread
+        private readonly HashSet<string> ngRetriedCommands = new HashSet<string>();
         private int lastVolumeSent;
         private bool powerIsOn;
         private bool videoIsMuted;
@@ -247,7 +249,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 scaled = (int)NumericalHelpers.Scale(level, 0, 65535, lowerLimit, upperLimit);
             }
 
-            SendData(string.Format("kf {0} {1}", Id, scaled));
+            // The panel reads the level as hex, like the feedback it returns
+            SendData(string.Format("kf {0} {1:X2}", Id, scaled));
         }
 
         /// <summary>
@@ -481,8 +484,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
 
         private void Init()
         {
-            WarmupTime = warmingTimeMs > 0 ? warmingTimeMs : 10000;
-            CooldownTime = coolingTimeMs > 0 ? coolingTimeMs : 8000;
+            // Defaults are applied in the constructor (warm 8s, cool 10s), matching the IR controller
+            WarmupTime = warmingTimeMs;
+            CooldownTime = coolingTimeMs;
 
             inputFeedback = new List<bool>();
             InputFeedback = new List<BoolFeedback>();
@@ -684,6 +688,15 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             if (statusAndValue.IndexOf("NG", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 this.LogVerbose("NG response received for command '{0}': {1}", command, s);
+
+                // Re-poll once per command; after that, wait for the regular poll. A panel that keeps
+                // answering NG would otherwise loop query -> NG -> query with no delay.
+                if (!ngRetriedCommands.Add(command))
+                {
+                    this.LogVerbose("Repeated NG for command '{0}'; waiting for the next poll", command);
+                    return;
+                }
+
                 PollAfterNgResponse(command);
                 return;
             }
@@ -693,7 +706,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 .Replace("OK", "")
                 .TrimEnd('x');
 
-            // Normalize both IDs to integers for comparison (handles "1" vs "01")
+            // Normalize both IDs to integers for comparison (handles "1" vs "01" and "0A" vs "0a")
             var normalizedReceived = NormalizeId(id);
             var normalizedExpected = NormalizeId(Id);
 
@@ -703,6 +716,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     Id, normalizedExpected, id, normalizedReceived);
                 return;
             }
+
+            // An OK reply re-arms the one-time NG re-poll for this command
+            ngRetriedCommands.Remove(command);
 
             switch (command)
             {
@@ -725,7 +741,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         }
 
         /// <summary>
-        /// Normalizes device ID for comparison (converts to integer string to handle "01" vs "1")
+        /// Normalizes device ID for comparison (converts to integer string to handle "01" vs "1", and the
+        /// case of hex IDs such as "0A" vs "0a")
         /// </summary>
         /// <param name="deviceId">Device ID to normalize</param>
         /// <returns>Normalized device ID as integer string</returns>
@@ -733,8 +750,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             try
             {
-                // Convert to int and back to string to remove leading zeros
-                return int.Parse(deviceId).ToString();
+                // Set IDs are hex on the wire. Parse as hex so letters compare regardless of case; for
+                // digit-only IDs this matches exactly the same pairs as a decimal parse.
+                return int.Parse(deviceId, NumberStyles.HexNumber, CultureInfo.InvariantCulture).ToString();
             }
             catch (Exception e)
             {
@@ -1244,6 +1262,10 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     VolumeGet();
                     CrestronEnvironment.Sleep(1500);
                     MuteGet();
+                    // Without this, a screen blanked at the panel (or a panel that boots blanked) never
+                    // reaches VideoMuteIsOn, and the first VideoMuteToggle sends mute-on again
+                    CrestronEnvironment.Sleep(1500);
+                    VideoMuteGet();
                 });
         }
 
