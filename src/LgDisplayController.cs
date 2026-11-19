@@ -35,6 +35,11 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         private bool isWarmingUp;
         private bool inputSwitchPending;
         private bool powerOnPending;
+
+        // Last power state asked for (null until the first PowerOn/PowerOff). A power command held
+        // back while the panel warms up or cools down is sent only if it is still the latest request,
+        // so "off then on" (or "on then off") inside the warm/cool window ends in the last state.
+        private volatile int requestedPower = -1; // -1 none, 0 off, 1 on
         private string lastCommandPrefix;
         // Commands already re-polled after an NG; only touched on the receive queue's thread
         private readonly HashSet<string> ngRetriedCommands = new HashSet<string>();
@@ -940,11 +945,18 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             else if (IsCoolingDown)
             {
                 this.LogVerbose("ExecuteSwitch: Device is cooling down. Powering on and executing {0} after cooldown.", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
+                requestedPower = 1; // selecting an input asks for the panel to be on
                 CrestronInvoke.BeginInvoke((o) =>
                 {
                     try
                     {
                         CrestronEnvironment.Sleep((int)CooldownTime);
+
+                        if (requestedPower != 1)
+                        {
+                            this.LogDebug("ExecuteSwitch: skipped after cooldown; power off was requested since");
+                            return;
+                        }
 
                         this.LogVerbose("ExecuteSwitch: Cooldown complete. Sending power on.");
                         SendPowerOn();
@@ -987,6 +999,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public override void PowerOn()
         {
+            requestedPower = 1;
+
             if (IsCoolingDown)
             {
                 if (powerOnPending) return;
@@ -999,6 +1013,12 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                         this.LogVerbose("PowerOn: Device is cooling down. Powering on after cooldown completes.");
 
                         CrestronEnvironment.Sleep((int)CooldownTime);
+
+                        if (requestedPower != 1)
+                        {
+                            this.LogDebug("PowerOn: skipped after cooldown; power off was requested since");
+                            return;
+                        }
 
                         this.LogVerbose("PowerOn: Cooldown complete. Powering on.");
                         SendPowerOn();
@@ -1019,6 +1039,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public override void PowerOff()
         {
+            requestedPower = 0;
+
             if (IsWarmingUp)
             {
                 CrestronInvoke.BeginInvoke((o) =>
@@ -1026,6 +1048,12 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     this.LogVerbose("PowerOff: Device is warming up. Powering off after warmup completes.");
 
                     CrestronEnvironment.Sleep((int)WarmupTime);
+
+                    if (requestedPower != 0)
+                    {
+                        this.LogDebug("PowerOff: skipped after warmup; power on was requested since");
+                        return;
+                    }
 
                     this.LogVerbose("PowerOff: Warmup complete. Powering off.");
                     SendPowerOff();
