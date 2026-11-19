@@ -33,13 +33,13 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         private bool isMuted;
         private bool isSerialComm;
         private bool isWarmingUp;
-        private bool inputSwitchPending;
-        private bool powerOnPending;
-
-        // Last power state asked for (null until the first PowerOn/PowerOff). A power command held
-        // back while the panel warms up or cools down is sent only if it is still the latest request,
-        // so "off then on" (or "on then off") inside the warm/cool window ends in the last state.
-        private volatile int requestedPower = -1; // -1 none, 0 off, 1 on
+        // One pending power slot and one pending input slot; the latest request wins. Held commands
+        // are applied when the warm-up / cool-down timers finish, and a held input after the settle
+        // delay. Every access goes through queueLock: timers and callers run on different threads.
+        private readonly object queueLock = new object();
+        private readonly LgCommandQueue<Action> commandQueue = new LgCommandQueue<Action>();
+        private System.Timers.Timer inputSettleTimer;
+        private const int InputSettleMs = 1000; // delay after warm-up before switching input
         private string lastCommandPrefix;
         // Commands already re-polled after an NG; only touched on the receive queue's thread
         private readonly HashSet<string> ngRetriedCommands = new HashSet<string>();
@@ -124,15 +124,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 if (isWarmingUp)
                 {
                     WarmupTimer = new System.Timers.Timer(WarmupTime) { AutoReset = false };
-                    WarmupTimer.Elapsed += (s, e) =>
-                    {
-                        IsWarmingUp = false;
-
-                        if (!inputSwitchPending)
-                        {
-                            InputGet();
-                        }
-                    };
+                    WarmupTimer.Elapsed += OnWarmupTimerElapsed;
                     WarmupTimer.Start();
                 }
                 else if (WarmupTimer != null)
@@ -158,7 +150,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 if (isCoolingDown)
                 {
                     CooldownTimer = new System.Timers.Timer(CooldownTime) { AutoReset = false };
-                    CooldownTimer.Elapsed += (s, e) => { IsCoolingDown = false; };
+                    CooldownTimer.Elapsed += OnCooldownTimerElapsed;
                     CooldownTimer.Start();
                 }
                 else if (CooldownTimer != null)
@@ -916,7 +908,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         }
 
         /// <summary>
-        /// Executes a switch, turning on display if necessary.
+        /// Executes a switch, turning on display if necessary. When the panel is on the input is
+        /// sent at once; otherwise it replaces any pending input and is sent once the panel is
+        /// ready, and the panel is asked to power on.
         /// </summary>
         /// <param name="selector"></param>
         public override void ExecuteSwitch(object selector)
@@ -927,141 +921,173 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 return;
             }
 
-            this.LogVerbose("ExecuteSwitch: preparing to execute {0}", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
+            var actionName = action.Method.DeclaringType?.Name + "." + action.Method.Name;
 
-            inputSwitchPending = true;
-
-            if (PowerIsOn)
+            lock (queueLock)
             {
-                try
+                var state = CurrentPanelState;
+                var decision = commandQueue.RequestInput(action, state);
+
+                if (decision.SendInputNow)
                 {
+                    this.LogVerbose("ExecuteSwitch: executing {0}", actionName);
                     action();
+                    return;
                 }
-                finally
-                {
-                    inputSwitchPending = false;
-                }
-            }
-            else if (IsCoolingDown)
-            {
-                this.LogVerbose("ExecuteSwitch: Device is cooling down. Powering on and executing {0} after cooldown.", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
-                requestedPower = 1; // selecting an input asks for the panel to be on
-                CrestronInvoke.BeginInvoke((o) =>
-                {
-                    try
-                    {
-                        CrestronEnvironment.Sleep((int)CooldownTime);
 
-                        if (requestedPower != 1)
-                        {
-                            this.LogDebug("ExecuteSwitch: skipped after cooldown; power off was requested since");
-                            return;
-                        }
-
-                        this.LogVerbose("ExecuteSwitch: Cooldown complete. Sending power on.");
-                        SendPowerOn();
-
-                        CrestronEnvironment.Sleep((int)WarmupTime + 1000); // warmup time + 1000 for input switching delay                    
-
-                        this.LogVerbose("ExecuteSwitch: Warmup complete. Executing {0}.", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
-                        action();
-                    }
-                    finally
-                    {
-                        inputSwitchPending = false;
-                    }
-                });
-            }
-            else
-            {
-                this.LogVerbose("ExecuteSwitch: Power is off. Powering on and executing {0} after warmup.", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
-                PowerOn();
-                CrestronInvoke.BeginInvoke((o) =>
-                {
-                    try
-                    {
-                        CrestronEnvironment.Sleep((int)WarmupTime + 1000); // warmup time + 1000 for input switching delay                    
-
-                        this.LogVerbose("ExecuteSwitch: Warmup complete. Executing {0}.", action?.Method.DeclaringType?.Name + "." + action?.Method.Name ?? "NULL");
-                        action();
-                    }
-                    finally
-                    {
-                        inputSwitchPending = false;
-                    }
-                });
+                this.LogVerbose("ExecuteSwitch: panel is {State}; {Input} is pending until the panel is ready", state, actionName);
+                ApplyPowerCommand(decision.PowerToSend);
             }
         }
 
-
         /// <summary>
-        /// Set Power On For Device
+        /// Set Power On For Device. While cooling down the request is held and sent when cool-down
+        /// ends; while warming up it cancels a pending power off and sends nothing.
         /// </summary>
         public override void PowerOn()
         {
-            requestedPower = 1;
-
-            if (IsCoolingDown)
+            lock (queueLock)
             {
-                if (powerOnPending) return;
-
-                powerOnPending = true;
-                CrestronInvoke.BeginInvoke((o) =>
+                var state = CurrentPanelState;
+                var command = commandQueue.RequestPower(true, state);
+                if (command == LgPowerCommand.None)
                 {
-                    try
-                    {
-                        this.LogVerbose("PowerOn: Device is cooling down. Powering on after cooldown completes.");
-
-                        CrestronEnvironment.Sleep((int)CooldownTime);
-
-                        if (requestedPower != 1)
-                        {
-                            this.LogDebug("PowerOn: skipped after cooldown; power off was requested since");
-                            return;
-                        }
-
-                        this.LogVerbose("PowerOn: Cooldown complete. Powering on.");
-                        SendPowerOn();
-                    }
-                    finally
-                    {
-                        powerOnPending = false;
-                    }
-                });
-                return;
+                    this.LogVerbose("PowerOn: panel is {State}; pending power is now {Pending}", state, commandQueue.PendingPower);
+                }
+                ApplyPowerCommand(command);
             }
-
-            SendPowerOn();
         }
 
         /// <summary>
-        /// Set Power Off for Device
+        /// Set Power Off for Device. While warming up the request is held and sent when warm-up
+        /// ends; while cooling down it cancels a pending power on and sends nothing.
         /// </summary>
         public override void PowerOff()
         {
-            requestedPower = 0;
-
-            if (IsWarmingUp)
+            lock (queueLock)
             {
-                CrestronInvoke.BeginInvoke((o) =>
+                var state = CurrentPanelState;
+                var command = commandQueue.RequestPower(false, state);
+                if (command == LgPowerCommand.None)
                 {
-                    this.LogVerbose("PowerOff: Device is warming up. Powering off after warmup completes.");
-
-                    CrestronEnvironment.Sleep((int)WarmupTime);
-
-                    if (requestedPower != 0)
-                    {
-                        this.LogDebug("PowerOff: skipped after warmup; power on was requested since");
-                        return;
-                    }
-
-                    this.LogVerbose("PowerOff: Warmup complete. Powering off.");
-                    SendPowerOff();
-                });
-                return;
+                    this.LogVerbose("PowerOff: panel is {State}; pending power is now {Pending}", state, commandQueue.PendingPower);
+                }
+                ApplyPowerCommand(command);
             }
+        }
 
-            SendPowerOff();
+        private LgPanelState CurrentPanelState
+        {
+            get
+            {
+                if (IsWarmingUp) return LgPanelState.WarmingUp;
+                if (IsCoolingDown) return LgPanelState.CoolingDown;
+                return PowerIsOn ? LgPanelState.On : LgPanelState.Off;
+            }
+        }
+
+        // Caller holds queueLock.
+        private void ApplyPowerCommand(LgPowerCommand command)
+        {
+            switch (command)
+            {
+                case LgPowerCommand.On:
+                    SendPowerOn();
+
+                    // No warm-up window was started (Wake-on-LAN only, or the panel already reports
+                    // on), so nothing will end one: release a pending input after the full delay.
+                    if (!IsWarmingUp && commandQueue.HasPendingInput)
+                    {
+                        StartInputSettleTimer((int)WarmupTime + InputSettleMs);
+                    }
+                    break;
+
+                case LgPowerCommand.Off:
+                    StopInputSettleTimer();
+                    SendPowerOff();
+                    break;
+            }
+        }
+
+        private void OnWarmupTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
+        {
+            lock (queueLock)
+            {
+                // Ignore a stale timer (warm-up was cancelled or restarted while this was queued)
+                if (!ReferenceEquals(sender, WarmupTimer)) return;
+
+                IsWarmingUp = false;
+
+                var command = commandQueue.WarmupComplete();
+                if (command == LgPowerCommand.Off)
+                {
+                    this.LogVerbose("Warm-up complete. Sending the pending power off.");
+                    ApplyPowerCommand(command);
+                    return;
+                }
+
+                if (commandQueue.HasPendingInput)
+                {
+                    StartInputSettleTimer(InputSettleMs);
+                }
+                else
+                {
+                    InputGet();
+                }
+            }
+        }
+
+        private void OnCooldownTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
+        {
+            lock (queueLock)
+            {
+                if (!ReferenceEquals(sender, CooldownTimer)) return;
+
+                IsCoolingDown = false;
+
+                var command = commandQueue.CooldownComplete();
+                if (command == LgPowerCommand.On)
+                {
+                    this.LogVerbose("Cool-down complete. Sending the pending power on.");
+                    ApplyPowerCommand(command);
+                }
+            }
+        }
+
+        // Caller holds queueLock.
+        private void StartInputSettleTimer(int delayMs)
+        {
+            StopInputSettleTimer();
+
+            inputSettleTimer = new System.Timers.Timer(delayMs) { AutoReset = false };
+            inputSettleTimer.Elapsed += OnInputSettleTimerElapsed;
+            inputSettleTimer.Start();
+        }
+
+        // Caller holds queueLock.
+        private void StopInputSettleTimer()
+        {
+            if (inputSettleTimer == null) return;
+
+            inputSettleTimer.Stop();
+            inputSettleTimer.Dispose();
+            inputSettleTimer = null;
+        }
+
+        private void OnInputSettleTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
+        {
+            lock (queueLock)
+            {
+                if (!ReferenceEquals(sender, inputSettleTimer)) return;
+
+                StopInputSettleTimer();
+
+                var action = commandQueue.TakeReadyInput(CurrentPanelState);
+                if (action == null) return;
+
+                this.LogVerbose("Panel ready. Executing pending input {0}.", action.Method.DeclaringType?.Name + "." + action.Method.Name);
+                action();
+            }
         }
 
         private void SendPowerOn()
