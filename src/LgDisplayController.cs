@@ -677,20 +677,26 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             // Expected format: "{command} {id} {OK|NG}{value}x"
             // Example OK: "a 1 OK01x"  Example NG: "a 1 NG01x"
-            var data = s.Trim().Split(' ');
+            // The reply is taken from the end of the line: unsolicited lines with no "x" (such as
+            // "mc 01 ea" around power changes) and stray bytes land in front of the next reply.
+            var response = LgResponseParser.Parse(s);
 
-            if (data.Length < 3)
+            if (response == null)
             {
-                this.LogVerbose("Unable to parse response, not enough data: {0}", s);
+                this.LogVerbose("Unable to parse response: {0}", s);
                 return;
             }
 
-            var command = data[0];
-            var id = data[1];
-            var statusAndValue = data[2];
+            if (LgResponseParser.HasLeadingNoise(s))
+            {
+                this.LogVerbose("Ignoring data in front of the reply: {0}", s);
+            }
+
+            var command = response.Command;
+            var id = response.SetId;
 
             // Check for NG response
-            if (statusAndValue.IndexOf("NG", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (!response.IsOk)
             {
                 this.LogVerbose("NG response received for command '{0}': {1}", command, s);
 
@@ -706,10 +712,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 return;
             }
 
-            // Strip OK prefix and trailing x delimiter
-            var responseValue = statusAndValue
-                .Replace("OK", "")
-                .TrimEnd('x');
+            var responseValue = response.Data;
 
             // Normalize both IDs to integers for comparison (handles "1" vs "01" and "0A" vs "0a")
             var normalizedReceived = NormalizeId(id);
@@ -824,6 +827,35 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                         port.Selector?.GetType().Name ?? "NULL");
                 }
             }
+        }
+
+        /// <summary>
+        /// Selects the input whose feedback code matches <paramref name="inputKey"/> (for example
+        /// "90" for HDMI 1) through <see cref="ExecuteSwitch"/>, so it follows the same power/input
+        /// queue as a route. Used by the Mobile Control input list (<see cref="LgInput.Select"/>).
+        /// </summary>
+        /// <param name="inputKey">LG input code, as used in the <c>xb</c> command and its feedback</param>
+        public void SelectInput(string inputKey)
+        {
+            var port = InputPorts.FirstOrDefault(p =>
+                p.FeedbackMatchObject is string fbMatch &&
+                string.Equals(fbMatch, inputKey, StringComparison.OrdinalIgnoreCase));
+
+            if (port == null)
+            {
+                this.LogError("SelectInput: no input port matches '{InputKey}'", inputKey);
+                return;
+            }
+
+            if (!(port.Selector is Action action))
+            {
+                this.LogError("SelectInput: port selector for '{InputKey}' is not an Action. Type: {Type}",
+                    inputKey, port.Selector?.GetType().Name ?? "NULL");
+                return;
+            }
+
+            this.LogVerbose("SelectInput: {InputKey}", inputKey);
+            ExecuteSwitch(action);
         }
 
         private RoutingInputPort GetInputPort(int input)
