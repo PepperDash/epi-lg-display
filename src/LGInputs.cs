@@ -82,9 +82,13 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
         }
 
+        /// <summary>
+        /// Selects this input through the controller's power/input queue, so a selection made while
+        /// the panel is off, warming up or cooling down powers it on and is applied once it is ready.
+        /// </summary>
         public void Select()
         {
-            _parent.SendData($"xb {_parent.Id} {Key}");
+            _parent.SelectInput(Key);
         }
     }
 }

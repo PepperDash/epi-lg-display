@@ -826,6 +826,35 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             }
         }
 
+        /// <summary>
+        /// Selects the input whose feedback code matches <paramref name="inputKey"/> (for example
+        /// "90" for HDMI 1) through <see cref="ExecuteSwitch"/>, so it follows the same power/input
+        /// queue as a route. Used by the Mobile Control input list (<see cref="LgInput.Select"/>).
+        /// </summary>
+        /// <param name="inputKey">LG input code, as used in the <c>xb</c> command and its feedback</param>
+        public void SelectInput(string inputKey)
+        {
+            var port = InputPorts.FirstOrDefault(p =>
+                p.FeedbackMatchObject is string fbMatch &&
+                string.Equals(fbMatch, inputKey, StringComparison.OrdinalIgnoreCase));
+
+            if (port == null)
+            {
+                this.LogError("SelectInput: no input port matches '{InputKey}'", inputKey);
+                return;
+            }
+
+            if (!(port.Selector is Action action))
+            {
+                this.LogError("SelectInput: port selector for '{InputKey}' is not an Action. Type: {Type}",
+                    inputKey, port.Selector?.GetType().Name ?? "NULL");
+                return;
+            }
+
+            this.LogVerbose("SelectInput: {InputKey}", inputKey);
+            ExecuteSwitch(action);
+        }
+
         private RoutingInputPort GetInputPort(int input)
         {
             return InputPorts.ElementAt(input);
