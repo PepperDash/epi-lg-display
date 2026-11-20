@@ -124,67 +124,47 @@ If you have any questions about the action, contact Andrew Welker or Neil Dorin.
 <!-- START Minimum Essentials Framework Versions -->
 ### Minimum Essentials Framework Versions
 
-- 3.0.0-rc.20
+- 3.0.0
+- 3.0.0
+- 3.0.0
 <!-- END Minimum Essentials Framework Versions -->
 <!-- START Config Example -->
 ### Config Example
 
 ```json
 {
-    "key": "display-1",
+    "key": "GeneratedKey",
     "uid": 1,
-    "name": "Display",
-    "type": "lgDisplay",
-    "group": "display",
+    "name": "GeneratedName",
+    "type": "LgDisplayProperties",
+    "group": "Group",
     "properties": {
-        "id": "01",
-        "volumeUpperLimit": 100,
+        "id": "SampleString",
+        "volumeUpperLimit": 0,
         "volumeLowerLimit": 0,
-        "pollIntervalMs": 10000,
-        "coolingTimeMs": 10000,
-        "warmingTimeMs": 8000,
-        "smallDisplay": false,
-        "overrideWol": false,
+        "pollIntervalMs": 0,
+        "coolingTimeMs": "SampleValue",
+        "warmingTimeMs": "SampleValue",
+        "udpSocketKey": "SampleString",
+        "macAddress": "SampleString",
+        "wolBroadcastAddress": "SampleString",
+        "wolPort": "SampleValue",
+        "smallDisplay": true,
+        "overrideWol": true,
         "friendlyNames": [
             {
-                "inputKey": "90",
-                "name": "HDMI 1",
-                "hideInput": false
-            },
-            {
-                "inputKey": "c0",
-                "name": "DisplayPort",
+                "inputKey": "SampleString",
+                "name": "SampleString",
                 "hideInput": true
             }
         ],
-        "control": {
-            "method": "com",
-            "controlPortDevKey": "processor",
-            "controlPortNumber": 1,
-            "comParams": {
-                "protocol": "RS232",
-                "baudRate": 9600,
-                "dataBits": 8,
-                "stopBits": 1,
-                "parity": "None",
-                "softwareHandshake": "None",
-                "hardwareHandshake": "None",
-                "pacing": 0
-            }
-        }
+        "RemoteOnly": true
     }
 }
 ```
 <!-- END Config Example -->
 <!-- START Supported Types -->
-### Supported Types
 
-- lgDisplay
-- lgPlugin
-- lg
-- lgDisplayIr
-- mockLgDisplay
-- lgDisplayMock
 <!-- END Supported Types -->
 <!-- START Join Maps -->
 
@@ -195,11 +175,6 @@ If you have any questions about the action, contact Andrew Welker or Neil Dorin.
 - ISelectableItems<string>
 - IBasicVolumeWithFeedback
 - ICommunicationMonitor
-- IInputHdmi1
-- IInputHdmi2
-- IInputHdmi3
-- IInputHdmi4
-- IInputDisplayPort1
 - IBridgeAdvanced
 - IHasInputs<string>
 - IBasicVideoMuteWithFeedback
@@ -223,7 +198,67 @@ If you have any questions about the action, contact Andrew Welker or Neil Dorin.
 <!-- START Public Methods -->
 ### Public Methods
 
+- public void Config_Class_Exists()
+- public void Config_Has_Parameterless_Constructor()
+- public void Config_Property_Has_JsonPropertyAttribute(string jsonName)
+- public void FriendlyName_Property_Has_JsonPropertyAttribute(string jsonName)
+- public void Config_Property_Type_Matches(string propertyName, string expectedTypeName)
+- public void FriendlyNames_Is_List_Of_FriendlyName()
+- public void Config_Sample_Json_Has_Expected_Keys()
+- public void FriendlyNames_Deserialize_As_List_With_Expected_Shape()
+- public void Deployed_Config_Shapes_Bind_Every_Property(string json)
+- public void Tcp_Bench_Config_Uses_Port_9761_With_OverrideWol()
+- public void Parse_CleanReply(string line, string cmd, string id, bool ok, string data)
+- public void Parse_PowerOffReplyAfterUnsolicitedMcLines_IsNotLost()
+- public void Parse_ReplyAfterStrayBytesAndMcLines_IsNotLost()
+- public void Parse_InputReplyAfterMcLines_IsNotLost()
+- public void Parse_NoReply_ReturnsNull(string? line)
+- public void Assembly_Loads_Successfully()
+- public void Assembly_Name_Is_EpiDisplayLg()
+- public void Factory_Count_Is_Three()
+- public void Factory_Exists_ByName(string factoryClassName)
+- public void All_Factories_Have_Parameterless_Constructor()
+- public void Factory_Sets_MinimumEssentialsFrameworkVersion_To_Pinned_Version(string factoryClassName)
+- public void Factory_Sets_TypeNames(string factoryClassName)
+- public void Factory_Source_Contains_TypeName(string factoryClassName, string typeName)
+- public void No_Duplicate_TypeNames_Across_Factories()
 - public void Select()
+- public void LgInput_Select_DoesNotSendDirectly()
+- public void LgInput_Select_UsesControllerSelectInput()
+- public void Controller_SelectInput_GoesThroughExecuteSwitch()
+- public void SelectInput(string inputKey)
+- public void PowerOn()
+- public void PowerOff()
+- public void Input(string input)
+- public void WarmupDone()
+- public void CooldownDone()
+- public void Ready()
+- public void PowerOn_WhenOff_SendsOnImmediately()
+- public void OnThenOff_DuringWarmup_SendsOffWhenWarmupEnds()
+- public void OnOffOn_DuringWarmup_SendsNothingWhenWarmupEnds()
+- public void PowerOn_WhileWarmingUp_IsANoOp()
+- public void RepeatedOff_DuringWarmup_SendsOneOff()
+- public void OffThenOn_DuringCooldown_SendsOnWhenCooldownEnds()
+- public void OffOnOff_DuringCooldown_SendsNothingWhenCooldownEnds()
+- public void PowerOff_WhileCoolingDown_IsANoOp()
+- public void PowerCommands_WhenIdle_AreSentImmediately()
+- public void Input_WhenOn_IsSentImmediately()
+- public void Inputs_DuringWarmup_OnlyTheLastIsSentOnceReady()
+- public void Input_WhenOff_PowersOnThenSendsInputAfterWarmup()
+- public void Inputs_WhenOff_SendOnePowerOnAndTheLastInput()
+- public void OffDuringCooldown_ThenInput_SendsOnThenThatInput()
+- public void InputDuringCooldown_ThenPowerOff_OffWinsAndInputIsDropped()
+- public void InputWhenOff_ThenPowerOffDuringWarmup_OffWinsAndInputIsDropped()
+- public void PowerOffThenInput_DuringWarmup_InputWinsAsTheLatestRequest()
+- public void InputDuringSettle_IsSentNowAndReplacesThePendingInput()
+- public void PowerOffDuringSettle_DropsThePendingInput()
+- public void TakeReadyInput_WhileWarmingOrCooling_LeavesTheInputPending()
+- public void Input_WhenOff_RequestsPowerOnDecision()
+- public void Select()
+- public LgPowerCommand RequestPower(bool on, LgPanelState state)
+- public LgInputDecision RequestInput(TInput input, LgPanelState state)
+- public LgPowerCommand WarmupComplete()
+- public LgPowerCommand CooldownComplete()
 - public void SetVolume(ushort level)
 - public void MuteOn()
 - public void MuteOff()
@@ -236,6 +271,7 @@ If you have any questions about the action, contact Andrew Welker or Neil Dorin.
 - public void VideoMuteGet()
 - public void LinkToApi(BasicTriList trilist, uint joinStart, string joinMapKey, EiscApiAdvanced bridge)
 - public void SendData(string s)
+- public void SelectInput(string inputKey)
 - public void ListRoutingInputPorts()
 - public void MuteGet()
 - public void VolumeGet()
@@ -252,17 +288,16 @@ If you have any questions about the action, contact Andrew Welker or Neil Dorin.
 - public void UpdateVolumeFb(string s)
 - public void UpdateMuteFb(string s)
 - public void StatusGet()
+- public void Connect()
+- public void Disconnect()
+- public void SendText(string text)
+- public void SendBytes(byte[] bytes)
 - public string Respond(string line)
 - public void SetPower(bool on)
 - public bool SetInput(string inputCode)
 - public void SetVolume(int level)
 - public void SetMute(bool muted)
 - public string Describe()
-- public void Connect()
-- public void Disconnect()
-- public void SendText(string text)
-- public void SendBytes(byte[] bytes)
-- public void Select()
 - public void LinkToApi(BasicTriList trilist, uint joinStart, string joinMapKey, EiscApiAdvanced bridge)
 - public void SendIrCommand(string cmd)
 - public void PowerOnPress(bool pressRelease)
@@ -329,6 +364,7 @@ If you have any questions about the action, contact Andrew Welker or Neil Dorin.
 - public void Home(bool pressRelease)
 - public void Back(bool pressRelease)
 - public void Enter(bool pressRelease)
+- public void Select()
 <!-- END Public Methods -->
 <!-- START Bool Feedbacks -->
 ### Bool Feedbacks
