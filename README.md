@@ -31,6 +31,7 @@ This repo contains a plugin for use with [PepperDash Essentials](https://github.
     "coolingTimeMs": 10000,
     "warmingTimeMs": 10000,
     "smallDisplay": false,
+    "um5kSeriesInputCodes": false,          //true for the LG UM5K series (110UM5K-BP.CUSFLR): HDMI 3 is a6 instead of 92
     "control": {
       "method": "com",
       "controlPortNumber": 1,
@@ -70,6 +71,19 @@ This repo contains a plugin for use with [PepperDash Essentials](https://github.
 
 The `smallDisplay` configuration option is used to control padding of the power on command. If `smallDisplay` is `true`, the power on command sent will be `ka 01 1`. If `smallDisplay` is `false`, the power on command sent will be `ka 01 01`.
 
+### UM5K series input codes (`um5kSeriesInputCodes`)
+
+Set `"um5kSeriesInputCodes": true` for the LG UM5K series. It was verified on the 110" model **110UM5K-BP.CUSFLR**, which uses input code `a6` for HDMI 3 instead of `92`. On site, `xb 01 92` was rejected with `b 01 NG92x`, and with the panel switched to HDMI 3 from the remote the input poll answered `b 01 OKa6x`.
+
+When it is `true`:
+
+- HDMI 3 is selected with `xb {id} A6`, upper-case like the driver's other hex commands.
+- An `a6` input poll reply is reported as HDMI 3, so routing to `hdmiIn3`, the bridge input joins and the Mobile Control input list all follow it.
+- HDMI 3 is keyed `a6` in the input list. A `friendlyNames` entry with `"inputKey": "92"` still applies to HDMI 3.
+- The `mockLgDisplay` type answers like a UM5K panel: it accepts `a6` for HDMI 3 and answers `92` with NG.
+
+Only HDMI 3 is remapped. HDMI 1 (`90`), HDMI 2 (`91`), HDMI 4 (`93`) and DisplayPort (`c0`) have not been verified on this model, so they keep their standard codes. The default is `false`, which leaves every input code unchanged.
+
 For more configuration information, see the [PepperDash Essentials wiki](https://github.com/PepperDash/Essentials/wiki).
 
 ## Mock Display (bench testing without hardware)
@@ -103,7 +117,7 @@ Use the `mocklg` console command to make changes at the panel, or to inject faul
 ```
 mocklg display01 status
 mocklg display01 power on|off
-mocklg display01 input 90|91|92|93|c0
+mocklg display01 input 90|91|92|93|c0    // a6 instead of 92 when um5kSeriesInputCodes is true
 mocklg display01 volume 0-100
 mocklg display01 mute on|off
 mocklg display01 fault none|ng|silent    // ng: answer everything with NG; silent: stop answering (goes offline)
@@ -145,6 +159,7 @@ If you have any questions about the action, contact Andrew Welker or Neil Dorin.
         "warmingTimeMs": 8000,
         "smallDisplay": false,
         "overrideWol": false,
+        "um5kSeriesInputCodes": false,
         "friendlyNames": [
             {
                 "inputKey": "90",

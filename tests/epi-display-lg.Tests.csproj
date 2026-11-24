@@ -24,6 +24,7 @@
     <!-- Pure decision logic with no Crestron dependency, compiled straight into the tests. -->
     <Compile Include="..\src\LgCommandQueue.cs" Link="LgCommandQueue.cs" />
     <Compile Include="..\src\LgResponseParser.cs" Link="LgResponseParser.cs" />
+    <Compile Include="..\src\LgInputCodes.cs" Link="LgInputCodes.cs" />
   </ItemGroup>
 
   <ItemGroup>
