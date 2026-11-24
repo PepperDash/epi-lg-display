@@ -48,7 +48,7 @@ This repo contains a plugin for use with [PepperDash Essentials](https://github.
     },
     "friendlyNames": [                      //if you want to use friendly names, add this section
 	        {
-	        	"inputKey": "90",           //The input key for the input you want to use a friendly name for, this has to a valid input key(90,91,c0)
+	        	"inputKey": "90",           //The input key for the input you want to use a friendly name for, must be "inputKey" (an entry named "key" is ignored) with a valid LG input code: 90, 91, 92, 93 or c0
 	        	"name": "Friendly Name 1",  //The desired name to be displayed on the screen
             "hideInput": false              //if set to true, the input will not be displayed in the list of inputs
 	        },
@@ -79,10 +79,40 @@ When it is `true`:
 
 - HDMI 3 is selected with `xb {id} A6`, upper-case like the driver's other hex commands.
 - An `a6` input poll reply is reported as HDMI 3, so routing to `hdmiIn3`, the bridge input joins and the Mobile Control input list all follow it.
-- HDMI 3 is keyed `a6` in the input list. A `friendlyNames` entry with `"inputKey": "92"` still applies to HDMI 3.
+- The panel is never sent `92`. HDMI 3 is keyed `a6` in the input list; where a config or caller names HDMI 3 by the standard key `"92"` (a `friendlyNames` entry, or `SelectInput("92")` from a room plugin or `devjson`), the plugin translates it to `a6` first, so the panel still receives `xb {id} A6`.
 - The `mockLgDisplay` type answers like a UM5K panel: it accepts `a6` for HDMI 3 and answers `92` with NG.
 
 Only HDMI 3 is remapped. HDMI 1 (`90`), HDMI 2 (`91`), HDMI 4 (`93`) and DisplayPort (`c0`) have not been verified on this model, so they keep their standard codes. The default is `false`, which leaves every input code unchanged.
+
+Confirmed working on site on 2026-11-24 with two 110UM5K-BP.CUSFLR panels over RS-232: with the option set, routing to `hdmiIn3` sends `xb 01 A6` and the panel switches to HDMI 3.
+
+#### Using it in a config
+
+1. Load a build of this plugin that includes `um5kSeriesInputCodes`. Older builds send `xb {id} 92` for HDMI 3 whatever the config says, and the panel answers `NG92x`.
+2. Add `"um5kSeriesInputCodes": true` to the `properties` of each UM5K display. Leave it out (or `false`) for every other LG model.
+3. Keep the tie line on `hdmiIn3` if that is where the cable is. The port name does not change; only the code sent to the panel does.
+4. In `friendlyNames`, use `"inputKey"` with the standard codes. `92` still names HDMI 3, so you don't need to write `a6`.
+5. The 110UM5K-BP.CUSFLR has no HDMI 4 port, but the driver still lists HDMI 4 (`93`). Hide it so it doesn't show in the UI. The panel does have a DisplayPort input (`c0`), so leave it shown unless the site doesn't use it:
+
+```json
+"um5kSeriesInputCodes": true,
+"friendlyNames": [
+  { "inputKey": "90", "name": "HDMI 1",      "hideInput": false },
+  { "inputKey": "91", "name": "HDMI 2",      "hideInput": false },
+  { "inputKey": "92", "name": "HDMI 3",      "hideInput": false },
+  { "inputKey": "93", "name": "HDMI 4",      "hideInput": true },
+  { "inputKey": "c0", "name": "DisplayPort", "hideInput": false }
+]
+```
+
+To check it on a processor, turn on stream debug for the display's COM device (the display key plus `-com`), then select HDMI 3:
+
+```
+setdevicestreamdebug:1 display01-com both
+devjson:1 {"deviceKey":"display01","methodName":"InputHdmi3","params":[]}
+```
+
+The TX line should read `xb 01 A6`. If it reads `xb 01 92`, the loaded build doesn't include this option.
 
 For more configuration information, see the [PepperDash Essentials wiki](https://github.com/PepperDash/Essentials/wiki).
 

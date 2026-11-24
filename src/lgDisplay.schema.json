@@ -91,7 +91,7 @@
         "um5kSeriesInputCodes": {
           "type": "boolean",
           "default": false,
-          "description": "Set true for the LG UM5K series (verified on 110UM5K-BP.CUSFLR), which uses input code a6 for HDMI 3 instead of 92 (\"xb 01 92\" answers \"b 01 NG92x\"; the input poll on HDMI 3 answers \"b 01 OKa6x\"). Only HDMI 3 is remapped; the other inputs are unverified on this model and keep their standard codes."
+          "description": "Set true for the LG UM5K series (verified on 110UM5K-BP.CUSFLR), which uses input code a6 for HDMI 3 instead of 92 (\"xb 01 92\" answers \"b 01 NG92x\"; the input poll on HDMI 3 answers \"b 01 OKa6x\"). Only HDMI 3 is remapped; the other inputs are unverified on this model and keep their standard codes. This model has no HDMI 4 port (hide input 93 with friendlyNames); it does have a DisplayPort input."
         },
         "friendlyNames": {
           "type": "array",
