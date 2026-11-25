@@ -51,6 +51,9 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         private ushort volumeLevelForSig;
         private readonly bool smallDisplay;
         private readonly bool overrideWol;
+        // UM5K series (110UM5K-BP.CUSFLR) uses a6 for HDMI 3 instead of 92; see
+        // LgDisplayPropertiesConfig.Um5kSeriesInputCodes
+        private readonly bool um5kSeriesInputCodes;
         private readonly string wolBroadcastAddress;
         private readonly string wolMacAddress;
         private readonly ushort wolPort;
@@ -77,6 +80,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             upperLimit = props.volumeUpperLimit;
             lowerLimit = props.volumeLowerLimit;
             overrideWol = props.OverrideWol;
+            um5kSeriesInputCodes = props.Um5kSeriesInputCodes;
             wolMacAddress = props.macAddress;
             wolBroadcastAddress = props.WolBroadcastAddress;
             wolPort = props.WolPort ?? 9;
@@ -551,7 +555,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     eRoutingPortConnectionType.Hdmi, new Action(InputHdmi2), this), "91");
             AddRoutingInputPort(
                 new RoutingInputPort(RoutingPortNames.HdmiIn3, eRoutingSignalType.Audio | eRoutingSignalType.Video,
-                    eRoutingPortConnectionType.Hdmi, new Action(InputHdmi3), this), "92");
+                    eRoutingPortConnectionType.Hdmi, new Action(InputHdmi3), this), Hdmi3InputCode);
             AddRoutingInputPort(
                 new RoutingInputPort(RoutingPortNames.HdmiIn4, eRoutingSignalType.Audio | eRoutingSignalType.Video,
                     eRoutingPortConnectionType.Hdmi, new Action(InputHdmi4), this), "93");
@@ -592,7 +596,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                 {
                     { "90", new LgInput("90", "HDMI 1", this) },
                     { "91", new LgInput("91", "HDMI 2", this) },
-                    { "92", new LgInput("92", "HDMI 3", this) },
+                    { Hdmi3InputCode, new LgInput(Hdmi3InputCode, "HDMI 3", this) },
                     { "93", new LgInput("93", "HDMI 4", this) },
                     { "c0", new LgInput("c0", "DisplayPort", this) },
                 }
@@ -608,19 +612,30 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             {
                 if (!string.IsNullOrEmpty(friendly.InputKey) && !string.IsNullOrEmpty(friendly.Name))
                 {
+                    var inputKey = LgInputCodes.NormalizeInputKey(friendly.InputKey, um5kSeriesInputCodes);
+
                     if (friendly.HideInput)
                     {
                         // Remove the input if hideInput is true
-                        Inputs.Items.Remove(friendly.InputKey);
+                        Inputs.Items.Remove(inputKey);
                     }
-                    else if (Inputs.Items.TryGetValue(friendly.InputKey, out var input))
+                    else if (Inputs.Items.TryGetValue(inputKey, out var input))
                     {
                         // Create a new instance of the input with the updated name  
                         var updatedInput = new LgInput(input.Key, friendly.Name, this);
-                        Inputs.Items[friendly.InputKey] = updatedInput;
+                        Inputs.Items[inputKey] = updatedInput;
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Input code for HDMI 3: "92", or "a6" when <see cref="LgDisplayPropertiesConfig.Um5kSeriesInputCodes"/>
+        /// is set. Used for the routing port's feedback match, the input list key and the xb command.
+        /// </summary>
+        private string Hdmi3InputCode
+        {
+            get { return LgInputCodes.Hdmi3For(um5kSeriesInputCodes); }
         }
 
         private void CommunicationMonitor_StatusChange(object sender, MonitorStatusChangeEventArgs e)
@@ -834,9 +849,15 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// "90" for HDMI 1) through <see cref="ExecuteSwitch"/>, so it follows the same power/input
         /// queue as a route. Used by the Mobile Control input list (<see cref="LgInput.Select"/>).
         /// </summary>
-        /// <param name="inputKey">LG input code, as used in the <c>xb</c> command and its feedback</param>
+        /// <param name="inputKey">LG input code, as used in the <c>xb</c> command and its feedback.
+        /// With <see cref="LgDisplayPropertiesConfig.Um5kSeriesInputCodes"/> set, "92" is translated to "a6"
+        /// first, so the panel is sent A6.</param>
         public void SelectInput(string inputKey)
         {
+            // With UM5K series codes, a caller's "92" means HDMI 3: translate it to "a6" so the
+            // panel is sent A6 (never 92)
+            inputKey = LgInputCodes.NormalizeInputKey(inputKey, um5kSeriesInputCodes);
+
             var port = InputPorts.FirstOrDefault(p =>
                 p.FeedbackMatchObject is string fbMatch &&
                 string.Equals(fbMatch, inputKey, StringComparison.OrdinalIgnoreCase));
@@ -908,11 +929,12 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         }
 
         /// <summary>
-        /// Select Hdmi 3 Input
+        /// Select Hdmi 3 Input: "xb {Id} 92", or "xb {Id} A6" when
+        /// <see cref="LgDisplayPropertiesConfig.Um5kSeriesInputCodes"/> is set (UM5K series, 110UM5K-BP.CUSFLR)
         /// </summary>
         public void InputHdmi3()
         {
-            SendData(string.Format("xb {0} 92", Id));
+            SendData(LgInputCodes.Hdmi3Command(Id, um5kSeriesInputCodes));
         }
 
         /// <summary>

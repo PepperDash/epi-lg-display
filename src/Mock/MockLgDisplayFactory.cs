@@ -33,7 +33,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                          ?? new MockLgDisplayPropertiesConfig();
             var options = config.Mock ?? new MockLgDisplayOptions();
 
-            var responder = new MockLgDisplayResponder(ParseSetId(config.Id), options);
+            // A UM5K series config gets a mock that answers like that panel (HDMI 3 is a6)
+            var responder = new MockLgDisplayResponder(ParseSetId(config.Id), options, config.Um5kSeriesInputCodes);
             var comms = new MockLgDisplayCommunication(dc.Key + "-mockComm", responder, options.ResponseDelayMs);
 
             MockLgDisplayConsole.Register(dc.Key, responder);

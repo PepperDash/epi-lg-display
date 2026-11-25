@@ -36,6 +36,7 @@ public class ConfigDeserializationTests
     [InlineData("wolPort")]
     [InlineData("smallDisplay")]
     [InlineData("overrideWol")]
+    [InlineData("um5kSeriesInputCodes")]
     [InlineData("friendlyNames")]
     public void Config_Property_Has_JsonPropertyAttribute(string jsonName)
     {
@@ -59,6 +60,7 @@ public class ConfigDeserializationTests
     [InlineData("Id", "String")]
     [InlineData("SmallDisplay", "Boolean")]
     [InlineData("OverrideWol", "Boolean")]
+    [InlineData("Um5kSeriesInputCodes", "Boolean")]
     [InlineData("WolBroadcastAddress", "String")]
     [InlineData("WolPort", "Nullable`1")]
     public void Config_Property_Type_Matches(string propertyName, string expectedTypeName)

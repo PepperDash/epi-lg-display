@@ -12,7 +12,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
     internal static class MockLgDisplayConsole
     {
         private const string Usage =
-            "mocklg <deviceKey> status | power on|off | input 90|91|92|93|c0 | volume 0-100 | mute on|off | fault none|ng|silent";
+            "mocklg <deviceKey> status | power on|off | input 90|91|92|93|c0 (a6 for HDMI 3 with um5kSeriesInputCodes) | volume 0-100 | mute on|off | fault none|ng|silent";
 
         // The console rejects help text over 79 bytes; the full usage prints when the command is run without arguments
         private const string Help = "Mock LG display: mocklg <key> status|power|input|volume|mute|fault";

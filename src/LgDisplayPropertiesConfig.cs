@@ -42,6 +42,25 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         [JsonProperty("overrideWol")]
         public bool OverrideWol { get; set; }
 
+        /// <summary>
+        /// Set true for the LG UM5K series, verified on model 110UM5K-BP.CUSFLR (110" UM5K). That
+        /// model uses input code a6 for HDMI 3 instead of 92: on site, "xb 01 92" was rejected with
+        /// "b 01 NG92x", and with the panel switched to HDMI 3 from the remote the input poll
+        /// answered "b 01 OKa6x". When true, HDMI 3 is selected with a6 and an a6 poll reply is
+        /// reported as HDMI 3 (routing port hdmiIn3, input list key "a6"). The panel is never sent
+        /// 92: a friendlyNames entry or SelectInput call that names HDMI 3 by the standard key "92"
+        /// is translated to "a6" first.
+        /// Only HDMI 3 is remapped: HDMI 1 (90), HDMI 2 (91), HDMI 4 (93) and DisplayPort (c0) have
+        /// not been verified on this model and keep their standard codes. This model has no HDMI 4
+        /// port (hide input 93 with a friendlyNames entry, "hideInput": true); it does have a
+        /// DisplayPort input.
+        /// Defaults to false, which leaves every input code unchanged.
+        /// </summary>
+        // NullValueHandling.Ignore so an explicit null keeps the default rather than throwing in
+        // ToObject and stopping the device from being created.
+        [JsonProperty("um5kSeriesInputCodes", NullValueHandling = NullValueHandling.Ignore)]
+        public bool Um5kSeriesInputCodes { get; set; }
+
         [JsonProperty("friendlyNames")]
         public List<FriendlyName> FriendlyNames { get; set; }
 

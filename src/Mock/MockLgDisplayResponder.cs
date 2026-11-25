@@ -44,6 +44,13 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// </summary>
         public static readonly HashSet<string> ValidInputs = new HashSet<string> { "90", "91", "92", "93", "c0" };
 
+        /// <summary>
+        /// Input codes a UM5K series panel (110UM5K-BP.CUSFLR) accepts: HDMI 3 is a6, and 92 is answered NG
+        /// </summary>
+        public static readonly HashSet<string> Um5kSeriesValidInputs = new HashSet<string> { "90", "91", "a6", "93", "c0" };
+
+        private readonly HashSet<string> validInputs;
+
         private readonly object stateLock = new object();
         private bool powerIsOn;
         private string input;
@@ -54,13 +61,17 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// <summary>
         /// Creates a responder for the panel with the given set ID
         /// </summary>
-        public MockLgDisplayResponder(int setId, MockLgDisplayOptions options)
+        /// <param name="setId">Set ID the panel answers to</param>
+        /// <param name="options">Starting state and behavior</param>
+        /// <param name="um5kSeriesInputCodes">Answer like a UM5K series panel, which uses a6 for HDMI 3</param>
+        public MockLgDisplayResponder(int setId, MockLgDisplayOptions options, bool um5kSeriesInputCodes = false)
         {
             options = options ?? new MockLgDisplayOptions();
 
+            validInputs = um5kSeriesInputCodes ? Um5kSeriesValidInputs : ValidInputs;
             SetId = setId;
             powerIsOn = options.PowerOn;
-            input = ValidInputs.Contains((options.Input ?? string.Empty).ToLower()) ? options.Input.ToLower() : "90";
+            input = validInputs.Contains((options.Input ?? string.Empty).ToLower()) ? options.Input.ToLower() : "90";
             volume = Math.Max(0, Math.Min(MaxVolume, options.Volume));
             isMuted = options.Muted;
             videoIsMuted = options.VideoMuted;
@@ -139,7 +150,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         public bool SetInput(string inputCode)
         {
             var code = (inputCode ?? string.Empty).ToLower();
-            if (!ValidInputs.Contains(code))
+            if (!validInputs.Contains(code))
             {
                 return false;
             }
@@ -195,7 +206,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
                     if (value != QueryValue)
                     {
                         var code = value.ToString("x2");
-                        if (!ValidInputs.Contains(code)) return null;
+                        if (!validInputs.Contains(code)) return null;
                         input = code;
                     }
                     return input;
