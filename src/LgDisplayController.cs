@@ -612,7 +612,7 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
             {
                 if (!string.IsNullOrEmpty(friendly.InputKey) && !string.IsNullOrEmpty(friendly.Name))
                 {
-                    var inputKey = FriendlyNameInputKey(friendly.InputKey);
+                    var inputKey = LgInputCodes.NormalizeInputKey(friendly.InputKey, um5kSeriesInputCodes);
 
                     if (friendly.HideInput)
                     {
@@ -636,15 +636,6 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         private string Hdmi3InputCode
         {
             get { return LgInputCodes.Hdmi3For(um5kSeriesInputCodes); }
-        }
-
-        // With UM5K series codes, a friendlyNames entry written for HDMI 3 as "92" still applies to
-        // HDMI 3 (now keyed "a6"). Without the flag the key is returned unchanged.
-        private string FriendlyNameInputKey(string inputKey)
-        {
-            return um5kSeriesInputCodes && string.Equals(inputKey, LgInputCodes.Hdmi3, StringComparison.OrdinalIgnoreCase)
-                ? Hdmi3InputCode
-                : inputKey;
         }
 
         private void CommunicationMonitor_StatusChange(object sender, MonitorStatusChangeEventArgs e)
@@ -858,9 +849,15 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         /// "90" for HDMI 1) through <see cref="ExecuteSwitch"/>, so it follows the same power/input
         /// queue as a route. Used by the Mobile Control input list (<see cref="LgInput.Select"/>).
         /// </summary>
-        /// <param name="inputKey">LG input code, as used in the <c>xb</c> command and its feedback</param>
+        /// <param name="inputKey">LG input code, as used in the <c>xb</c> command and its feedback.
+        /// With <see cref="LgDisplayPropertiesConfig.Um5kSeriesInputCodes"/> set, "92" is translated to "a6"
+        /// first, so the panel is sent A6.</param>
         public void SelectInput(string inputKey)
         {
+            // With UM5K series codes, a caller's "92" means HDMI 3: translate it to "a6" so the
+            // panel is sent A6 (never 92)
+            inputKey = LgInputCodes.NormalizeInputKey(inputKey, um5kSeriesInputCodes);
+
             var port = InputPorts.FirstOrDefault(p =>
                 p.FeedbackMatchObject is string fbMatch &&
                 string.Equals(fbMatch, inputKey, StringComparison.OrdinalIgnoreCase));

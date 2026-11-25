@@ -36,5 +36,19 @@ namespace PepperDash.Essentials.Plugins.Lg.Display
         {
             return string.Format("xb {0} {1}", setId, Hdmi3For(um5kSeriesInputCodes).ToUpperInvariant());
         }
+
+        /// <summary>
+        /// Translates an input key written with the standard codes to the key the input list and
+        /// the routing ports use. With <paramref name="um5kSeriesInputCodes"/> set, the standard
+        /// HDMI 3 key "92" becomes "a6", so a config or caller that names HDMI 3 as "92" still
+        /// reaches HDMI 3 and the panel is sent A6, never 92. Any other key, or any key with the
+        /// flag off, is returned unchanged.
+        /// </summary>
+        public static string NormalizeInputKey(string inputKey, bool um5kSeriesInputCodes)
+        {
+            return um5kSeriesInputCodes && string.Equals(inputKey, Hdmi3, System.StringComparison.OrdinalIgnoreCase)
+                ? Hdmi3Um5kSeries
+                : inputKey;
+        }
     }
 }
