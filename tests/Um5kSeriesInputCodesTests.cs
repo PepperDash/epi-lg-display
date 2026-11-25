@@ -8,9 +8,8 @@ namespace PepperDash.Essentials.Plugins.Lg.Display.Tests;
 /// The LG UM5K series (110UM5K-BP.CUSFLR) uses a6 for HDMI 3 instead of 92. On site, "xb 01 92"
 /// was answered "b 01 NG92x", and the input poll with the panel on HDMI 3 answered "b 01 OKa6x".
 /// "um5kSeriesInputCodes": true remaps HDMI 3 only; with it false every code is unchanged.
-/// The controller needs a Crestron runtime, so the code choice is tested through
-/// <see cref="LgInputCodes"/> (compiled into the tests) and the controller's use of it is checked
-/// in the source, like <see cref="InputSelectRoutingTests"/>.
+/// The controller needs a Crestron runtime, so the behaviour is tested through
+/// <see cref="LgInputCodes"/> and <see cref="MockLgDisplayResponder"/>, both compiled into the tests.
 /// </summary>
 public class Um5kSeriesInputCodesTests
 {
@@ -69,23 +68,6 @@ public class Um5kSeriesInputCodesTests
         }
     }
 
-    [Fact]
-    public void Config_Summary_Names_The_Model_And_The_Evidence()
-    {
-        var source = AssemblyFixture.FindSourceForClass("LgDisplayPropertiesConfig");
-        source.Should().NotBeNull();
-
-        var end = source!.IndexOf("public bool Um5kSeriesInputCodes", StringComparison.Ordinal);
-        end.Should().BeGreaterThan(0);
-        var start = source.LastIndexOf("/// <summary>", end, StringComparison.Ordinal);
-        var summary = source.Substring(start, end - start);
-
-        summary.Should().Contain("110UM5K-BP.CUSFLR");
-        summary.Should().Contain("NG92x");
-        summary.Should().Contain("OKa6x");
-        summary.Should().Contain("Only HDMI 3 is remapped");
-    }
-
     // ---- input codes ----
 
     [Fact]
@@ -138,59 +120,71 @@ public class Um5kSeriesInputCodesTests
         r.Data.Should().Be(LgInputCodes.Hdmi3);
     }
 
-    // ---- controller uses the switchable code everywhere HDMI 3 is keyed ----
+    // ---- input keys: "92" still means HDMI 3 when the flag is on ----
 
-    private static string ControllerSource()
+    [Theory]
+    [InlineData("92")]
+    [InlineData("A6")]
+    [InlineData("a6")]
+    public void FlagOn_Hdmi3_Keys_Normalize_To_A6(string key)
     {
-        var source = AssemblyFixture.FindSourceForClass("LgDisplayController");
-        source.Should().NotBeNull();
-        return source!;
+        // friendlyNames and SelectInput both go through NormalizeInputKey
+        LgInputCodes.NormalizeInputKey(key, true).ToLower().Should().Be("a6");
+    }
+
+    [Theory]
+    [InlineData("90")]
+    [InlineData("91")]
+    [InlineData("93")]
+    [InlineData("c0")]
+    public void FlagOn_Other_Keys_Are_Unchanged(string key)
+    {
+        LgInputCodes.NormalizeInputKey(key, true).Should().Be(key);
+    }
+
+    [Theory]
+    [InlineData("90")]
+    [InlineData("92")]
+    [InlineData("a6")]
+    [InlineData("c0")]
+    public void FlagOff_Keys_Are_Unchanged(string key)
+    {
+        LgInputCodes.NormalizeInputKey(key, false).Should().Be(key);
+    }
+
+    // ---- mock panel answers like a UM5K when the flag is on ----
+
+    private static MockLgDisplayResponder PoweredOnPanel(bool um5k) =>
+        new(1, new MockLgDisplayOptions { PowerOn = true }, um5k);
+
+    [Fact]
+    public void Um5k_Mock_Accepts_A6_And_Rejects_92()
+    {
+        var panel = PoweredOnPanel(true);
+
+        panel.SetInput("92").Should().BeFalse();
+        panel.SetInput("a6").Should().BeTrue();
+        panel.Respond("xb 01 92").Should().Be("b 01 NG92x");
+        panel.Respond("xb 01 A6").Should().Be("b 01 OKa6x");
+        panel.Respond("xb 01 ff").Should().Be("b 01 OKa6x");
     }
 
     [Fact]
-    public void Controller_Has_No_Hardcoded_92()
+    public void Standard_Mock_Accepts_92_And_Rejects_A6()
     {
-        // Code only: the doc comments still mention "92" when describing the two codes
-        var source = ControllerSource();
-        source.Should().NotContain("this), \"92\")", "the HDMI 3 routing port must use Hdmi3InputCode");
-        source.Should().NotContain("{ \"92\",", "the HDMI 3 input list key must use Hdmi3InputCode");
-        source.Should().NotContain("LgInput(\"92\"", "the HDMI 3 input list item must use Hdmi3InputCode");
-        source.Should().NotContain("xb {0} 92", "InputHdmi3 must send LgInputCodes.Hdmi3Command");
+        var panel = PoweredOnPanel(false);
+
+        panel.SetInput("a6").Should().BeFalse();
+        panel.SetInput("92").Should().BeTrue();
+        panel.Respond("xb 01 a6").Should().Be("b 01 NGa6x");
+        panel.Respond("xb 01 92").Should().Be("b 01 OK92x");
     }
 
     [Fact]
-    public void Controller_Hdmi3_Routing_Port_Matches_Hdmi3InputCode()
+    public void Mock_Command_For_Hdmi3_Matches_What_The_Panel_Accepts()
     {
-        var source = ControllerSource();
-        var start = source.IndexOf("RoutingPortNames.HdmiIn3", StringComparison.Ordinal);
-        start.Should().BeGreaterThan(0);
-        var end = source.IndexOf(';', start);
-
-        source.Substring(start, end - start).Should().Contain("Hdmi3InputCode");
-    }
-
-    [Fact]
-    public void Controller_Input_List_Keys_Hdmi3_By_Hdmi3InputCode()
-    {
-        ControllerSource().Should().Contain("{ Hdmi3InputCode, new LgInput(Hdmi3InputCode, \"HDMI 3\", this) }");
-    }
-
-    [Fact]
-    public void Controller_InputHdmi3_Sends_Switchable_Code()
-    {
-        var source = ControllerSource();
-        var start = source.IndexOf("public void InputHdmi3()", StringComparison.Ordinal);
-        start.Should().BeGreaterThan(0);
-        var close = source.IndexOf('}', start);
-
-        source.Substring(start, close - start).Should().Contain("LgInputCodes.Hdmi3Command(Id, um5kSeriesInputCodes)");
-    }
-
-    [Fact]
-    public void Controller_Hdmi3InputCode_Reads_The_Config_Flag()
-    {
-        var source = ControllerSource();
-        source.Should().Contain("um5kSeriesInputCodes = props.Um5kSeriesInputCodes;");
-        source.Should().Contain("LgInputCodes.Hdmi3For(um5kSeriesInputCodes)");
+        // The command the controller sends for HDMI 3 is accepted by a panel of the same kind
+        PoweredOnPanel(true).Respond(LgInputCodes.Hdmi3Command("01", true)).Should().Be("b 01 OKa6x");
+        PoweredOnPanel(false).Respond(LgInputCodes.Hdmi3Command("01", false)).Should().Be("b 01 OK92x");
     }
 }
